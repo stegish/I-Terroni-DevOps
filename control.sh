@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 if [ "$1" = "init" ]; then  #REFACTORING "$1"
 
     if [ -f "/tmp/minitwit.db" ]; then 
