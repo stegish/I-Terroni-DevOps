@@ -1,8 +1,8 @@
-{% extends "layout.html" %}
+{% extends "layout_refactor.html" %}
 {% block title %}
-  {% if request.endpoint == 'public_timeline' %}
+  {% if request.matched_route.name == 'public_timeline' %}
     Public Timeline
-  {% elif request.endpoint == 'user_timeline' %}
+  {% elif request.matched_route.name == 'user_timeline' %}
     {{ profile_user.username }}'s Timeline
   {% else %}
     My Timeline
@@ -10,10 +10,10 @@
 {% endblock %}
 {% block body %}
   <h2>{{ self.title() }}</h2>
-  {% if g.user %}
-    {% if request.endpoint == 'user_timeline' %}
+  {% if user %}
+    {% if request.matched_route.name == 'user_timeline' %}
       <div class=followstatus>
-      {% if g.user.user_id == profile_user.user_id %}
+      {% if user.user_id == profile_user.user_id %}
         This is you!
       {% elif followed %}
         You are currently following this user.
@@ -25,12 +25,11 @@
           }}">Follow user</a>.
       {% endif %}
       </div>
-    {% elif request.endpoint == 'timeline' %}
+    {% elif request.matched_route.name == 'timeline' %}
       <div class=twitbox>
-        <h3>What's on your mind {{ g.user.username }}?</h3>
+        <h3>What's on your mind {{ user.username }}?</h3>
         <form action="{{ url_for('add_message') }}" method=post>
-          <p><input type=text name=text size=60><!--
-          --><input type=submit value="Share">
+          <p><input type=text name=text size=60><input type=submit value="Share">
         </form>
       </div>
     {% endif %}

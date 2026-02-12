@@ -1,26 +1,45 @@
 #!/usr/bin/env bash
 
-if [ "$1" = "init" ]; then  #REFACTORING "$1"
+# Configuration
+PYTHON_CMD="python3"
+APP_MODULE="minitwit_refactor"
+APP_FILE="${APP_MODULE}.py"
+# The Python code uses a relative path 'tmp/minitwit.db', not the system '/tmp/'
+DB_PATH="tmp/minitwit.db" 
 
-    if [ -f "/tmp/minitwit.db" ]; then 
-        echo "Database already exists."
+if [ "$1" = "init" ]; then
+    # Ensure the local tmp directory exists as required by the Python code
+    mkdir -p tmp 
+
+    if [ -f "$DB_PATH" ]; then 
+        echo "Database already exists at $DB_PATH."
         exit 1
     fi
-    echo "Putting a database to /tmp/minitwit.db..."
-    python -c"from minitwit import init_db;init_db()"
-elif [ "$1" = "startprod" ]; then   #REFACTORING "$1"
+    echo "Initializing database..."
+    # Imports init_db from the new refactored file
+    $PYTHON_CMD -c "from $APP_MODULE import init_db; init_db()"
+
+elif [ "$1" = "startprod" ]; then
      echo "Starting minitwit with production webserver..."
-     nohup "$HOME"/.local/bin/gunicorn --workers 4 --timeout 120 --bind 0.0.0.0:5000 minitwit:app > /tmp/out.log 2>&1 & #REFACTORING "$HOME"
-elif [ "$1" = "start" ]; then   #REFACTORING "$1"
+     # Note: See 'Important Note' below regarding the Python code structure for Gunicorn
+     nohup gunicorn --workers 4 --timeout 120 --bind 0.0.0.0:5000 "${APP_MODULE}:app" > tmp/out.log 2>&1 &
+
+elif [ "$1" = "start" ]; then
     echo "Starting minitwit..."
-    nohup $(which python) minitwit.py > /tmp/out.log 2>&1 & #REFACTORING $()
-elif [ "$1" = "stop" ]; then    #REFACTORING "$1"
+    # Runs the Python script directly (Development mode)
+    nohup $PYTHON_CMD "$APP_FILE" > tmp/out.log 2>&1 &
+
+elif [ "$1" = "stop" ]; then
     echo "Stopping minitwit..."
-    pkill -f minitwit
-elif [ "$1" = "inspectdb" ]; then   #REFACTORING "$1"
+    # Kills processes matching the new filename
+    pkill -f "$APP_MODULE"
+
+elif [ "$1" = "inspectdb" ]; then
     ./flag_tool -i | less
-elif [ "$1" = "flag" ]; then    #REFACTORING "$1"
+
+elif [ "$1" = "flag" ]; then
     ./flag_tool "$@"
+
 else
   echo "I do not know this command..."
 fi
