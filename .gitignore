@@ -5,3 +5,4 @@ flag_tool
 tmp
 mergefile.py
 merge.txt
+.env
