@@ -3,3 +3,5 @@ flag_tool
 *.pyc 
 *.db
 tmp
+mergefile.py
+merge.txt

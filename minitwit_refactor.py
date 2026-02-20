@@ -6,6 +6,7 @@ from datetime import datetime
 
 from pyramid.config import Configurator
 from pyramid.view import view_config
+from db import connect_db, query_db, get_user_id
 from pyramid.response import Response
 from pyramid.httpexceptions import HTTPFound, HTTPNotFound, HTTPForbidden
 from pyramid.session import SignedCookieSessionFactory
@@ -14,26 +15,8 @@ from wsgiref.simple_server import make_server
 from werkzeug.security import check_password_hash, generate_password_hash
 
 # Configuration
-DATABASE = 'tmp/minitwit.db'
 PER_PAGE = 30
 SECRET_KEY = 'development key'
-
-def connect_db():
-    """Returns a new connection to the database."""
-    return sqlite3.connect(DATABASE)
-
-def query_db(request, query, args=(), one=False):
-    """Queries the database and returns a list of dictionaries."""
-    cur = request.db.execute(query, args)
-    rv = [dict((cur.description[idx][0], value)
-               for idx, value in enumerate(row)) for row in cur.fetchall()]
-    return (rv[0] if rv else None) if one else rv
-
-def get_user_id(request, username):
-    """Look up the id for a username."""
-    rv = query_db(request, 'select user_id from user where username = ?',
-                  [username], one=True)
-    return rv['user_id'] if rv else None
 
 def format_datetime(timestamp):
     """Format a timestamp for display."""
@@ -240,13 +223,6 @@ def logout(request):
     request.session.flash('You were logged out')
     return HTTPFound(location=request.route_url('public_timeline'))
 
-def init_db():
-    """Helper to create the database tables (run manually if needed)."""
-    with sqlite3.connect(DATABASE) as db:
-        with open('schema.sql', 'rb') as f:
-            db.cursor().executescript(f.read().decode('utf-8'))
-        db.commit()
-
 with Configurator() as config:
     config.include('pyramid_jinja2')
     config.add_jinja2_renderer('.html')
@@ -267,13 +243,19 @@ with Configurator() as config:
     config.add_route('register', '/register')
     config.add_route('logout', '/logout')
     config.add_route('add_message', '/add_message')
+    config.add_route('api_latest', '/latest')
+    config.add_route('api_msgs', '/msgs')
+    config.add_route('api_user_msgs', '/msgs/{username}')
+    config.add_route('api_follows', '/fllws/{username}')
     config.add_route('follow_user', '/{username}/follow')
     config.add_route('unfollow_user', '/{username}/unfollow')
     config.add_route('user_timeline', '/{username}')
+
+    #pyramid scan both this file and the api.py
     config.scan()
+    config.scan('api')
 
     app = config.make_wsgi_app()
-
 
 if __name__ == '__main__':
     print("Running on http://0.0.0.0:5000")
