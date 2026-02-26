@@ -1,7 +1,7 @@
 services:
   minitwit:
     build: .
-    image: my_minitwit_image
+    image: michaelfant/minitwit:latest
     ports:
       - "8080:5000"
     volumes:
