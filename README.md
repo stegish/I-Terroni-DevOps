@@ -1,4 +1,3 @@
-cat << 'EOF' > README.md
 # I-Terroni-DevOps
 
 Welcome to the **I-Terroni-DevOps** repository for the ITU-MiniTwit application. This project is a micro-blogging platform built with Pyramid and deployed automatically using Docker and Vagrant on DigitalOcean.
