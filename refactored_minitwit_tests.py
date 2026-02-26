@@ -61,10 +61,10 @@ def add_message(http_session, text):
 
 def test_register():
     """Make sure registering works"""
-    r = register('user12', 'default')
+    r = register('user13', 'default')
     assert 'You were successfully registered ' \
            'and can login now' in r.text
-    r = register('user12', 'default')
+    r = register('user13', 'default')
     assert 'The username is already taken' in r.text
     r = register('', 'default')
     assert 'You have to enter a username' in r.text
@@ -77,13 +77,13 @@ def test_register():
 
 def test_login_logout():
     """Make sure logging in and logging out works"""
-    r, http_session = register_and_login('user12', 'default')
+    r, http_session = register_and_login('user13', 'default')
     assert 'You were logged in' in r.text
     r = logout(http_session)
     assert 'You were logged out' in r.text
-    r, _ = login('user12', 'wrongpassword')
+    r, _ = login('user13', 'wrongpassword')
     assert 'Invalid password' in r.text
-    r, _ = login('user12', 'wrongpassword')
+    r, _ = login('user14', 'wrongpassword')
     assert 'Invalid username' in r.text
 
 def test_message_recording():
