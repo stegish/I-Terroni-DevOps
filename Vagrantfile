@@ -27,7 +27,7 @@ Vagrant.configure("2") do |config|
     apt-get update
     
     echo "Installing Docker and Docker Compose..."
-    apt-get install -y docker.io docker-compose git
+    apt-get install -y docker.io docker-compose-plugin git
     
     systemctl enable docker
     systemctl start docker
