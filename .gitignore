@@ -1,7 +1,6 @@
 __pycache__
 flag_tool
 *.pyc 
-*.db
 mergefile.py
 merge.txt
 .env
