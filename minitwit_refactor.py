@@ -6,7 +6,8 @@ from datetime import datetime
 
 from pyramid.config import Configurator
 from pyramid.view import view_config
-from db import connect_db, query_db, get_user_id
+from models import User, Message, Follower
+from db import get_db_session, get_user_id
 from pyramid.response import Response
 from pyramid.httpexceptions import HTTPFound, HTTPNotFound, HTTPForbidden
 from pyramid.session import SignedCookieSessionFactory
@@ -32,15 +33,20 @@ def init_request(event):
     """
     Opens the DB connection and loads the logged-in user.
     """
+# SOSTITUISCI L'INTERO METODO init_request CON:
+@subscriber(NewRequest)
+def init_request(event):
     request = event.request
-    request.db = connect_db()
+    request.db = get_db_session()
     def close_db(request):
         request.db.close()
     request.add_finished_callback(close_db)
+    
     request.user = None
     if 'user_id' in request.session:
-        request.user = query_db(request, 'select * from user where user_id = ?',
-                                [request.session['user_id']], one=True)
+        user_obj = request.db.query(User).filter(User.user_id == request.session['user_id']).first()
+        if user_obj:
+            request.user = {'user_id': user_obj.user_id, 'username': user_obj.username, 'email': user_obj.email, 'pw_hash': user_obj.pw_hash}
 
 @subscriber(BeforeRender)
 def add_global_renderer_globals(event):
@@ -64,47 +70,45 @@ def timeline(request):
     if not request.user:
         return HTTPFound(location=request.route_url('public_timeline'))
     
-    messages = query_db(request, '''
-        select message.*, user.* from message, user
-        where message.flagged = 0 and message.author_id = user.user_id and (
-            user.user_id = ? or
-            user.user_id in (select whom_id from follower
-                                    where who_id = ?))
-        order by message.pub_date desc limit ?''',
-        [request.session['user_id'], request.session['user_id'], PER_PAGE])
-        
+    followed_subquery = request.db.query(Follower.whom_id).filter(Follower.who_id == request.session['user_id']).subquery()
+    
+    messages_query = request.db.query(Message, User).join(User, Message.author_id == User.user_id).filter(
+        Message.flagged == 0,
+        (User.user_id == request.session['user_id']) | (User.user_id.in_(followed_subquery))
+    ).order_by(Message.pub_date.desc()).limit(PER_PAGE).all()
+    
+    messages = [{'message_id': m.message_id, 'author_id': m.author_id, 'text': m.text, 'pub_date': m.pub_date, 'flagged': m.flagged, 'user_id': u.user_id, 'username': u.username, 'email': u.email} for m, u in messages_query]        
     return {'messages': messages}
 
 @view_config(route_name='public_timeline', renderer='templates/timeline_refactor.html')
 def public_timeline(request):
     """Displays the latest messages of all users."""
-    messages = query_db(request, '''
-        select message.*, user.* from message, user
-        where message.flagged = 0 and message.author_id = user.user_id
-        order by message.pub_date desc limit ?''', [PER_PAGE])
+    messages_query = request.db.query(Message, User).join(User, Message.author_id == User.user_id).filter(
+        Message.flagged == 0
+    ).order_by(Message.pub_date.desc()).limit(PER_PAGE).all()
+    
+    messages = [{'message_id': m.message_id, 'author_id': m.author_id, 'text': m.text, 'pub_date': m.pub_date, 'flagged': m.flagged, 'user_id': u.user_id, 'username': u.username, 'email': u.email} for m, u in messages_query]    
     return {'messages': messages}
 
 @view_config(route_name='user_timeline', renderer='templates/timeline_refactor.html')
 def user_timeline(request):
     """Displays a user's tweets."""
     username = request.matchdict['username']
-    profile_user = query_db(request, 'select * from user where username = ?',
-                            [username], one=True)
-    if profile_user is None:
+    profile_user_obj = request.db.query(User).filter(User.username == username).first()
+    if profile_user_obj is None:
         return HTTPNotFound()
+    profile_user = {'user_id': profile_user_obj.user_id, 'username': profile_user_obj.username, 'email': profile_user_obj.email}
         
     followed = False
     if request.user:
-        check = query_db(request, '''select 1 from follower where
-            follower.who_id = ? and follower.whom_id = ?''',
-            [request.session['user_id'], profile_user['user_id']], one=True)
+        check = request.db.query(Follower).filter(Follower.who_id == request.session['user_id'], Follower.whom_id == profile_user['user_id']).first()
         followed = check is not None
         
-    messages = query_db(request, '''
-            select message.*, user.* from message, user where
-            user.user_id = message.author_id and user.user_id = ?
-            order by message.pub_date desc limit ?''',
-            [profile_user['user_id'], PER_PAGE])
+    messages_query = request.db.query(Message, User).join(User, Message.author_id == User.user_id).filter(
+        Message.flagged == 0, User.user_id == profile_user['user_id']
+    ).order_by(Message.pub_date.desc()).limit(PER_PAGE).all()
+    
+    messages = [{'message_id': m.message_id, 'author_id': m.author_id, 'text': m.text, 'pub_date': m.pub_date, 'flagged': m.flagged, 'user_id': u.user_id, 'username': u.username, 'email': u.email} for m, u in messages_query]
             
     return {'messages': messages, 'followed': followed, 'profile_user': profile_user}
 
@@ -119,8 +123,8 @@ def follow_user(request):
     if whom_id is None:
         return HTTPNotFound()
         
-    request.db.execute('insert into follower (who_id, whom_id) values (?, ?)',
-                       [request.session['user_id'], whom_id])
+    new_follower = Follower(who_id=request.session['user_id'], whom_id=whom_id)
+    request.db.add(new_follower)
     request.db.commit()
     request.session.flash('You are now following "%s"' % username)
     return HTTPFound(location=request.route_url('user_timeline', username=username))
@@ -136,9 +140,10 @@ def unfollow_user(request):
     if whom_id is None:
         return HTTPNotFound()
         
-    request.db.execute('delete from follower where who_id=? and whom_id=?',
-                       [request.session['user_id'], whom_id])
-    request.db.commit()
+    follower = request.db.query(Follower).filter(Follower.who_id == request.session['user_id'], Follower.whom_id == whom_id).first()
+    if follower:
+        request.db.delete(follower)
+        request.db.commit()
     request.session.flash('You are no longer following "%s"' % username)
     return HTTPFound(location=request.route_url('user_timeline', username=username))
 
@@ -150,9 +155,8 @@ def add_message(request):
     
     text = request.POST.get('text')
     if text:
-        request.db.execute('''insert into message (author_id, text, pub_date, flagged)
-            values (?, ?, ?, 0)''', (request.session['user_id'], text,
-                                  int(time.time())))
+        new_msg = Message(author_id=request.session['user_id'], text=text, pub_date=int(time.time()), flagged=0)
+        request.db.add(new_msg)
         request.db.commit()
         request.session.flash('Your message was recorded')
         
@@ -169,15 +173,13 @@ def login(request):
         username = request.POST.get('username')
         password = request.POST.get('password')
         
-        user = query_db(request, '''select * from user where
-            username = ?''', [username], one=True)
-            
+        user = request.db.query(User).filter(User.username == username).first()
         if user is None:
             error = 'Invalid username'
-        elif not check_password_hash(user['pw_hash'], password):
+        elif not check_password_hash(user.pw_hash, password):
             error = 'Invalid password'
         else:
-            request.session['user_id'] = user['user_id']
+            request.session['user_id'] = user.user_id
             request.session.flash('You were logged in')
             return HTTPFound(location=request.route_url('timeline'))
             
@@ -207,9 +209,8 @@ def register(request):
         elif get_user_id(request, username) is not None:
             error = 'The username is already taken'
         else:
-            request.db.execute('''insert into user (
-                username, email, pw_hash) values (?, ?, ?)''',
-                [username, email, generate_password_hash(password)])
+            new_user = User(username=username, email=email, pw_hash=generate_password_hash(password))
+            request.db.add(new_user)
             request.db.commit()
             request.session.flash('You were successfully registered and can login now')
             return HTTPFound(location=request.route_url('login'))

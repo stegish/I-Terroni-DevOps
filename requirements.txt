@@ -2,3 +2,4 @@ pyramid
 pyramid_jinja2
 werkzeug
 gunicorn
+sqlalchemy

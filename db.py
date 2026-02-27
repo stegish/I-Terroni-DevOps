@@ -1,27 +1,21 @@
-import sqlite3
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
-DATABASE = 'tmp/minitwit.db'
+DATABASE_URI = 'sqlite:///tmp/minitwit.db'
+engine = create_engine(DATABASE_URI, connect_args={"check_same_thread": False})
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-def connect_db():
-    """returns a new connection to the database"""
-    return sqlite3.connect(DATABASE)
-
-def query_db(request, query, args=(), one=False):
-    """queries the database, returns a list of dictionaries"""
-    cur = request.db.execute(query, args)
-    rv = [dict((cur.description[idx][0], value)
-               for idx, value in enumerate(row)) for row in cur.fetchall()]
-    return (rv[0] if rv else None) if one else rv
+def get_db_session():
+    """return the new database session"""
+    return SessionLocal()
 
 def get_user_id(request, username):
-    """look up the id for a username"""
-    rv = query_db(request, 'select user_id from user where username = ?',
-                  [username], one=True)
-    return rv['user_id'] if rv else None
+    """search the id of a user"""
+    from models import User
+    user = request.db.query(User).filter(User.username == username).first()
+    return user.user_id if user else None
 
 def init_db():
-    """helper to create the database tables"""
-    with connect_db() as db:
-        with open('schema.sql', 'rb') as f:
-            db.cursor().executescript(f.read().decode('utf-8'))
-        db.commit()
+    """initialize the db tables"""
+    from models import Base
+    Base.metadata.create_all(bind=engine)
