@@ -19,3 +19,5 @@ def init_db():
     """initialize the db tables"""
     from models import Base
     Base.metadata.create_all(bind=engine)
+
+init_db()
