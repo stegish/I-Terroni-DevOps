@@ -1,6 +1,7 @@
 import time
 from datetime import datetime
 from pyramid.view import view_config
+from models import LatestCommand, User, Message, Follower
 from pyramid.response import Response
 from pyramid.httpexceptions import HTTPForbidden, HTTPNotFound
 from werkzeug.security import generate_password_hash
@@ -20,9 +21,12 @@ def update_latest(request):
     if parsed_latest is not None:
         try:
             latest_val = int(parsed_latest)
-            request.db.execute("CREATE TABLE IF NOT EXISTS latest_command (id INTEGER PRIMARY KEY, value INTEGER)")
-            request.db.execute("DELETE FROM latest_command")
-            request.db.execute("INSERT INTO latest_command (id, value) VALUES (1, ?)", [latest_val])
+            cmd = request.db.query(LatestCommand).filter(LatestCommand.id == 1).first()
+            if not cmd:
+                cmd = LatestCommand(id=1, value=latest_val)
+                request.db.add(cmd)
+            else:
+                cmd.value = latest_val
             request.db.commit()
         except ValueError:
             pass
@@ -35,9 +39,8 @@ def format_api_datetime(timestamp):
 def get_latest(request):
     """returns the latest ID"""
     try:
-        cur = request.db.execute("SELECT value FROM latest_command WHERE id = 1")
-        row = cur.fetchone()
-        latest = row[0] if row else -1
+        cmd = request.db.query(LatestCommand).filter(LatestCommand.id == 1).first()
+        latest = cmd.value if cmd else -1
     except Exception:
         latest = -1
     return {'latest': latest}
@@ -46,6 +49,7 @@ def get_latest(request):
 def api_register(request):
     """register a new user via API"""
     update_latest(request)
+    require_simulator_auth(request)
     try:
         data = request.json_body
     except ValueError:
@@ -68,9 +72,8 @@ def api_register(request):
     if error:
         return Response(json={'status': 400, 'error_msg': error}, status=400)
 
-    request.db.execute('''insert into user (
-        username, email, pw_hash) values (?, ?, ?)''',
-        [username, email, generate_password_hash(password)])
+    new_user = User(username=username, email=email, pw_hash=generate_password_hash(password))
+    request.db.add(new_user)
     request.db.commit()
     return Response(status=204)
 
@@ -81,13 +84,11 @@ def api_msgs(request):
     require_simulator_auth(request)
     
     no = int(request.GET.get('no', 100))
-    messages = query_db(request, '''
-        select message.text, message.pub_date, user.username 
-        from message, user
-        where message.flagged = 0 and message.author_id = user.user_id
-        order by message.pub_date desc limit ?''', [no])
+    messages_query = request.db.query(Message, User).join(User, Message.author_id == User.user_id).filter(
+        Message.flagged == 0
+    ).order_by(Message.pub_date.desc()).limit(no).all()
         
-    results = [{'content': msg['text'], 'pub_date': format_api_datetime(msg['pub_date']), 'user': msg['username']} for msg in messages]
+    results = [{'content': msg.text, 'pub_date': format_api_datetime(msg.pub_date), 'user': usr.username} for msg, usr in messages_query]
     return results
 
 @view_config(route_name='api_user_msgs', request_method='GET', renderer='json')
@@ -102,13 +103,11 @@ def api_user_msgs_get(request):
         raise HTTPNotFound()
         
     no = int(request.GET.get('no', 100))
-    messages = query_db(request, '''
-        select message.text, message.pub_date, user.username 
-        from message, user
-        where message.flagged = 0 and user.user_id = message.author_id and user.user_id = ?
-        order by message.pub_date desc limit ?''', [user_id, no])
+    messages_query = request.db.query(Message, User).join(User, Message.author_id == User.user_id).filter(
+        Message.flagged == 0, User.user_id == user_id
+    ).order_by(Message.pub_date.desc()).limit(no).all()
         
-    results = [{'content': msg['text'], 'pub_date': format_api_datetime(msg['pub_date']), 'user': msg['username']} for msg in messages]
+    results = [{'content': msg.text, 'pub_date': format_api_datetime(msg.pub_date), 'user': usr.username} for msg, usr in messages_query]
     return results
 
 @view_config(route_name='api_user_msgs', request_method='POST', renderer='json')
@@ -129,8 +128,8 @@ def api_user_msgs_post(request):
         
     content = data.get('content')
     if content:
-        request.db.execute('''insert into message (author_id, text, pub_date, flagged)
-            values (?, ?, ?, 0)''', (user_id, content, int(time.time())))
+        new_msg = Message(author_id=user_id, text=content, pub_date=int(time.time()), flagged=0)
+        request.db.add(new_msg)
         request.db.commit()
         
     return Response(status=204)
@@ -147,13 +146,11 @@ def api_follows_get(request):
         raise HTTPNotFound()
         
     no = int(request.GET.get('no', 100))
-    followers = query_db(request, '''
-        select user.username from user
-        inner join follower on follower.whom_id = user.user_id
-        where follower.who_id = ?
-        limit ?''', [user_id, no])
+    followers = request.db.query(User.username).join(Follower, Follower.whom_id == User.user_id).filter(
+        Follower.who_id == user_id
+    ).limit(no).all()
         
-    return {'follows': [row['username'] for row in followers]}
+    return {'follows': [row[0] for row in followers]}
 
 @view_config(route_name='api_follows', request_method='POST', renderer='json')
 def api_follows_post(request):
@@ -177,9 +174,10 @@ def api_follows_post(request):
         if whom_id is None:
             raise HTTPNotFound()
             
-        check = query_db(request, 'select 1 from follower where who_id = ? and whom_id = ?', [user_id, whom_id], one=True)
+        check = request.db.query(Follower).filter(Follower.who_id == user_id, Follower.whom_id == whom_id).first()
         if not check:
-            request.db.execute('insert into follower (who_id, whom_id) values (?, ?)', [user_id, whom_id])
+            new_follower = Follower(who_id=user_id, whom_id=whom_id)
+            request.db.add(new_follower)
             request.db.commit()
             
     elif 'unfollow' in data:
@@ -188,7 +186,9 @@ def api_follows_post(request):
         if whom_id is None:
             raise HTTPNotFound()
             
-        request.db.execute('delete from follower where who_id=? and whom_id=?', [user_id, whom_id])
-        request.db.commit()
+        follower = request.db.query(Follower).filter(Follower.who_id == user_id, Follower.whom_id == whom_id).first()
+        if follower:
+            request.db.delete(follower)
+            request.db.commit()
         
     return Response(status=204)
