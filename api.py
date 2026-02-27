@@ -6,7 +6,7 @@ from pyramid.response import Response
 from pyramid.httpexceptions import HTTPForbidden, HTTPNotFound
 from werkzeug.security import generate_password_hash
 
-from db import query_db, get_user_id
+from db import get_user_id
 
 def require_simulator_auth(request):
     """checks if the request contains the authorization header"""

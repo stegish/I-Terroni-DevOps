@@ -46,7 +46,7 @@ jobs:
           yes 2>/dev/null | docker compose up -d
           
           echo "waiting on port 8080..."
-          timeout 30s bash -c 'until curl -s http://localhost:8080 > /dev/null; do echo "waiting..."; sleep 2; done'
+          timeout 30s bash -c 'until curl -s http://localhost:8080 > /dev/null; do echo "waitin..."; sleep 2; done'
           
           docker run --rm --network=host ${{ secrets.DOCKER_USERNAME }}/minitwittestimage
 
