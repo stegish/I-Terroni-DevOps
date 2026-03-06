@@ -134,6 +134,19 @@ def api_user_msgs_post(request):
         
     return Response(status=204)
 
+@view_config(route_name='api_metrics', request_method='GET', renderer='json')
+def api_metrics(request):
+    """follower and user metrics"""
+    total_users = request.db.query(User).count()
+    total_follows = request.db.query(Follower).count()
+    
+    avg_followers = (total_follows / total_users) if total_users > 0 else 0
+    
+    return {
+        'total_users': total_users,
+        'average_followers': round(avg_followers, 2)
+    }
+
 @view_config(route_name='api_follows', request_method='GET', renderer='json')
 def api_follows_get(request):
     """get list of users followed by the given user"""

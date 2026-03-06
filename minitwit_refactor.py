@@ -237,7 +237,8 @@ with Configurator() as config:
     config.set_session_factory(session_factory)
 
     config.add_static_view(name='static', path='static')
-    
+    config.add_route('api_metrics', '/metrics')
+
     config.add_route('timeline', '/')
     config.add_route('public_timeline', '/public')
     config.add_route('login', '/login')
@@ -251,6 +252,7 @@ with Configurator() as config:
     config.add_route('follow_user', '/{username}/follow')
     config.add_route('unfollow_user', '/{username}/unfollow')
     config.add_route('user_timeline', '/{username}')
+
 
     #pyramid scan both this file and the api.py
     config.scan()
