@@ -5,8 +5,15 @@ from models import LatestCommand, User, Message, Follower
 from pyramid.response import Response
 from pyramid.httpexceptions import HTTPForbidden, HTTPNotFound
 from werkzeug.security import generate_password_hash
+from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
+from pyramid.response import Response
 
 from db import get_user_id
+
+# Define Prometheus counters
+c_update_latest = Counter('minitwit_fct_update_latest_total', 'Calls to update_latest')
+c_register = Counter('minitwit_fct_register_total', 'Calls to register')
+c_add_message = Counter('minitwit_fct_add_message_total', 'Calls to add_message')
 
 def require_simulator_auth(request):
     """checks if the request contains the authorization header"""
@@ -17,6 +24,7 @@ def require_simulator_auth(request):
 #we need to store the latest variable on our database to handling the request from the API
 def update_latest(request):
     """parses the (latest) query param and saves it to the database"""
+    c_update_latest.inc()
     parsed_latest = request.GET.get('latest')
     if parsed_latest is not None:
         try:
@@ -48,6 +56,7 @@ def get_latest(request):
 @view_config(route_name='register', request_method='POST', header='Authorization', renderer='json')
 def api_register(request):
     """register a new user via API"""
+    c_register.inc()
     update_latest(request)
     require_simulator_auth(request)
     try:
@@ -94,6 +103,7 @@ def api_msgs(request):
 @view_config(route_name='api_user_msgs', request_method='GET', renderer='json')
 def api_user_msgs_get(request):
     """get messages for a specific user"""
+    c_add_message.inc()
     update_latest(request)
     require_simulator_auth(request)
     
@@ -205,3 +215,8 @@ def api_follows_post(request):
             request.db.commit()
         
     return Response(status=204)
+
+@view_config(route_name='prometheus_metrics', request_method='GET')
+def metrics(request):
+    """exposes prometheus metrics"""
+    return Response(generate_latest(), content_type=CONTENT_TYPE_LATEST)

@@ -3,3 +3,4 @@ pyramid_jinja2
 werkzeug
 gunicorn
 sqlalchemy
+prometheus-client

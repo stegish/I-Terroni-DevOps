@@ -237,8 +237,9 @@ with Configurator() as config:
     config.set_session_factory(session_factory)
 
     config.add_static_view(name='static', path='static')
-    config.add_route('api_metrics', '/metrics')
-
+    config.add_route('api_metrics', '/api/stats') 
+    
+    config.add_route('prometheus_metrics', '/metrics')
     config.add_route('timeline', '/')
     config.add_route('public_timeline', '/public')
     config.add_route('login', '/login')
