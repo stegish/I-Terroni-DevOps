@@ -59,10 +59,14 @@ jobs:
           SSH_KEY: ${{ secrets.SSH_KEY }}
 
       - name: Deploy to server
-        run: >
-          ssh $SSH_USER@$SSH_HOST
-          -i ~/.ssh/minitwit.key -o StrictHostKeyChecking=no
-          '/vagrant/deploy.sh'
+        run: |
+          scp -i ~/.ssh/minitwit.key -o StrictHostKeyChecking=no -r docker-compose.yml prometheus.yml grafana/ root@$DROPLET_IP:/vagrant/
+          
+          ssh -i ~/.ssh/minitwit.key -o StrictHostKeyChecking=no root@$DROPLET_IP "
+            cd /vagrant &&
+            sudo docker compose pull &&
+            sudo docker compose up -d --remove-orphans
+          "
         env:
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
