@@ -2,6 +2,30 @@
 
 Welcome to the **I-Terroni-DevOps** repository for the ITU-MiniTwit application. This project is a micro-blogging platform built with Pyramid and deployed automatically using Docker and Vagrant on DigitalOcean.
 
+## Why Pyramid over Flask/Bottle
+We didn't use **Bottle + Jinja2** because it requires manually integrating two separate tools—a micro-framework and a template engine.
+
+Flask improves on this but relies on global state (g object), making testing harder—you need to simulate Flask's application context.
+
+We eventually chose Pyramid because:
+
+*Explicit request object*: Attach DB/sessions directly to request.db, clean and testable
+
+*Consistent structure*: Built-in Jinja2 (pyramid_jinja2), routing, and comprehensive docs
+
+## Database Abstraction Layer (SQLAlchemy)
+
+Without abstraction, our code was full with raw SQL queries written directly in functions: `SELECT * FROM user WHERE id=?`. This created chaos—changing databases meant rewriting everything, we risked SQL injection, and business logic got mixed up with SQL strings.
+
+We fixed it with three distinct layers:
+
+**db.py** handles only database connections. It's the single file that imports `sqlite3`.
+
+**models.py** defines User and Message as Python objects. SQLAlchemy automatically translates them into tables and correct queries.
+
+**App functions** now contain only business logic: they ask models for data using simple calls like `User.query.filter_by(id=1).first()`.
+
+
 ## Infrastructure & Deployment Documentation
 
 We deploy our software using a Virtual Machine (Droplet) hosted on **DigitalOcean**, fully automated via **Vagrant** (Infrastructure as Code). 
