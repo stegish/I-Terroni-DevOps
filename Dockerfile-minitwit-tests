@@ -7,4 +7,4 @@ RUN pip install --no-cache-dir -r requirements.txt pytest requests
 
 COPY . .
 
-CMD ["pytest", "refactored_minitwit_tests.py", "minitwit_sim_api_test.py"]
+CMD ["pytest", "minitwit_tests_refactor.py", "minitwit_sim_api_test.py"]
