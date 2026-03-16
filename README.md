@@ -103,4 +103,34 @@ Since our codebase is already hosted on GitHub and we deploy to DigitalOcean, Gi
 * **All-in-One Pipeline**: It seamlessly handles building the code, running our Pytest suite, pushing the compiled images to Docker Hub, and triggering the deployment script on our DigitalOcean Droplet via SSH.
 * **Cost-Effective**: It requires no external Jenkins/Bamboo servers to maintain and is completely free for public repositories, making it the perfect fit for our project.
 
+### 7. Database Migration (SQLite → MySQL)
+
+We migrated the production database from SQLite to a **DigitalOcean Managed MySQL 8** instance. Each collaborator must add the `DATABASE_URL` to their local `.env` file using this template:
+```
+DATABASE_URL=mysql+pymysql://<username>:<password>@<host>:25060/<name_database>
+```
+
+The connection string is available in the DigitalOcean control panel under Databases → Connection Details.
+
+#### Test vs Production database
+
+The CI pipeline (GitHub Actions) uses **SQLite** for the test step, while production uses **MySQL**. This is an intentional and standard pattern for the following reasons:
+
+* No cost: SQLite runs locally in the runner with no external service needed
+* No whitelist issues: entirely in-process, no network involved
+* Fast: no connection latency during tests
+
+SQLAlchemy abstracts the difference between the two engines, so the same ORM models work on both without any code changes. The `DATABASE_URL` injected during tests is `sqlite:///tmp/minitwit.db`; the one injected at deploy time points to the DO MySQL instance via GitHub Secrets.
+
+During the migration to MySQL, the existing SQLite data was not transferred to the new database. As a result, the production database restarted empty and will be filled with the new data of the simulator (16.03.2026).
+
+### 8. Monitoring (Prometheus + Grafana)
+
+We collect and visualize metrics using **Prometheus** and **Grafana**, split into two dedicated dashboards:
+
+* **Hardware dashboard**: infrastructure-level metrics collected via `node-exporter` (CPU usage, memory, disk I/O, and network traffic) on the DigitalOcean Droplet.
+* **Software dashboard**: application-level metrics instrumented directly in the MiniTwit codebase via `prometheus-client` — (request counts, response times, and endpoint-level activity).
+
+Both dashboards are provisioned automatically via the `monitoring/` directory mounted into the Grafana container, so they are available immediately after `docker compose up`.
+
 > **AI Disclosure:** Portions of this codebase were generated or optimized using LLMs. All AI-generated logic has been reviewed and tested for accuracy and security.
