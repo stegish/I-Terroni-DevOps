@@ -1,5 +1,4 @@
 import time
-import sqlite3
 import os
 from hashlib import md5
 from datetime import datetime
@@ -17,7 +16,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 # Configuration
 PER_PAGE = 30
-SECRET_KEY = 'development key'
+SECRET_KEY = os.environ.get("SECRET_KEY", "development key")
 
 def format_datetime(timestamp):
     """Format a timestamp for display."""
@@ -30,12 +29,7 @@ def gravatar_url(email, size=80):
 
 @subscriber(NewRequest)
 def init_request(event):
-    """
-    Opens the DB connection and loads the logged-in user.
-    """
-# SOSTITUISCI L'INTERO METODO init_request CON:
-@subscriber(NewRequest)
-def init_request(event):
+    """Opens the DB connection and loads the logged-in user."""
     request = event.request
     request.db = get_db_session()
     def close_db(request):
