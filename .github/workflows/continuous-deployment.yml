@@ -63,11 +63,12 @@ jobs:
           DROPLET_IP: ${{ secrets.DROPLET_IP }}
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          scp -i ~/.ssh/minitwit.key -o StrictHostKeyChecking=no -r docker-compose.yml prometheus.yml grafana/ root@$DROPLET_IP:/vagrant/
-          
+          scp -i ~/.ssh/minitwit.key -o StrictHostKeyChecking=no -r docker-compose.yml monitoring/ root@$DROPLET_IP:/vagrant/
           ssh -i ~/.ssh/minitwit.key -o StrictHostKeyChecking=no root@$DROPLET_IP "
             cd /vagrant &&
+            echo "DATABASE_URL=$DATABASE_URL" >> .env &&
             sudo docker compose pull &&
             sudo docker compose up -d --remove-orphans
           "

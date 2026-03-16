@@ -1,8 +1,9 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-DATABASE_URI = 'sqlite:///tmp/minitwit.db'
-engine = create_engine(DATABASE_URI, connect_args={"check_same_thread": False})
+import os
+DATABASE_URI = os.environ.get("DATABASE_URL", "sqlite:///tmp/minitwit.db")
+engine = create_engine(DATABASE_URI)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db_session():

@@ -4,3 +4,5 @@ werkzeug
 gunicorn
 sqlalchemy
 prometheus-client
+pymysql
+cryptography
