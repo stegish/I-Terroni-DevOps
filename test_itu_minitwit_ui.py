@@ -1,8 +1,5 @@
 import os
 import time
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from models import User
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -11,7 +8,7 @@ from selenium.webdriver.support import expected_conditions as EC
 
 GUI_URL      = os.environ.get("GUI_URL",      "http://minitwit:5000")
 SELENIUM_HUB = os.environ.get("SELENIUM_HUB", "http://selenium:4444/wd/hub")
-DATABASE_URL = os.environ.get("DATABASE_URL",  "sqlite:////app/tmp/minitwit.db")
+
 
 def _register_user_via_gui(driver, data):
     driver.get(GUI_URL + "/register")
@@ -21,27 +18,11 @@ def _register_user_via_gui(driver, data):
     for idx, str_content in enumerate(data):
         input_fields[idx].send_keys(str_content)
     input_fields[3].send_keys(Keys.RETURN)
+    # Pyramid redirects to /login after register, flash message appears there
     wait = WebDriverWait(driver, 10)
     flashes = wait.until(EC.presence_of_all_elements_located((By.CLASS_NAME, "flashes")))
     return flashes
 
-def _get_user_by_name(name):
-    engine = create_engine(DATABASE_URL)
-    Session = sessionmaker(bind=engine)
-    session = Session()
-    user = session.query(User).filter(User.username == name).first()
-    session.close()
-    return user
-
-def _delete_user_by_name(name):
-    engine = create_engine(DATABASE_URL)
-    Session = sessionmaker(bind=engine)
-    session = Session()
-    user = session.query(User).filter(User.username == name).first()
-    if user:
-        session.delete(user)
-        session.commit()
-    session.close()
 
 def _make_driver():
     options = webdriver.ChromeOptions()
@@ -57,12 +38,12 @@ def _make_driver():
             time.sleep(3)
     raise RuntimeError(f"Selenium hub at {SELENIUM_HUB} never became available.")
 
+
 def test_register_user_via_gui():
     """
     This is a UI test. It only interacts with the UI that is rendered in the browser and checks that visual
     responses that users observe are displayed.
     """
-    _delete_user_by_name("Me")
     driver = _make_driver()
     try:
         generated_msg = _register_user_via_gui(driver, ["Me", "me@some.where", "secure123", "secure123"])[0].text
@@ -70,22 +51,28 @@ def test_register_user_via_gui():
         assert generated_msg == expected_msg
     finally:
         driver.quit()
-        _delete_user_by_name("Me")
 
 
 def test_register_user_via_gui_and_check_db_entry():
     """
-    This is an end-to-end test. Before registering a user via the UI, it checks that no such user exists in the
-    database yet. After registering a user, it checks that the respective user appears in the database.
+    This is an end-to-end test. Registers a user via the UI and verifies the user
+    exists in the system by logging in successfully afterwards.
+    Note: direct DB access is not possible since the test container and app container
+    do not share a filesystem, so verification is done via the UI.
     """
-    _delete_user_by_name("Me2")
     driver = _make_driver()
     try:
-        assert _get_user_by_name("Me2") is None
-        generated_msg = _register_user_via_gui(driver, ["Me2", "me@some.where", "secure123", "secure123"])[0].text
+        generated_msg = _register_user_via_gui(driver, ["Me2", "me2@some.where", "secure123", "secure123"])[0].text
         expected_msg = "You were successfully registered and can login now"
         assert generated_msg == expected_msg
-        assert _get_user_by_name("Me2").username == "Me2"
+
+        # Verify user exists by logging in successfully
+        driver.get(GUI_URL + "/login")
+        driver.find_element(By.NAME, "username").send_keys("Me2")
+        driver.find_element(By.NAME, "password").send_keys("secure123")
+        driver.find_element(By.NAME, "password").send_keys(Keys.RETURN)
+        wait = WebDriverWait(driver, 10)
+        flashes = wait.until(EC.presence_of_all_elements_located((By.CLASS_NAME, "flashes")))
+        assert "You were logged in" in flashes[0].text
     finally:
         driver.quit()
-        _delete_user_by_name("Me2")
