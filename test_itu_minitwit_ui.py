@@ -78,14 +78,14 @@ def test_register_user_via_gui_and_check_db_entry():
     This is an end-to-end test. Before registering a user via the UI, it checks that no such user exists in the
     database yet. After registering a user, it checks that the respective user appears in the database.
     """
-    _delete_user_by_name("Me")
+    _delete_user_by_name("Me2")
     driver = _make_driver()
     try:
-        assert _get_user_by_name("Me") is None
-        generated_msg = _register_user_via_gui(driver, ["Me", "me@some.where", "secure123", "secure123"])[0].text
+        assert _get_user_by_name("Me2") is None
+        generated_msg = _register_user_via_gui(driver, ["Me2", "me@some.where", "secure123", "secure123"])[0].text
         expected_msg = "You were successfully registered and can login now"
         assert generated_msg == expected_msg
-        assert _get_user_by_name("Me").username == "Me"
+        assert _get_user_by_name("Me2").username == "Me2"
     finally:
         driver.quit()
-        _delete_user_by_name("Me")
+        _delete_user_by_name("Me2")
