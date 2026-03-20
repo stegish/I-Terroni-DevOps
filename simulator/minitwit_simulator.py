@@ -127,7 +127,9 @@ def main(host):
                 # error handling (204 success, 400 user exists)
                 # 400 user exists already but not an error to log
                 if not ((response.status_code == 204) or (response.status_code == 400)):
-                    ts_str = datetime.strftime(datetime.now(timezone.utc), "%Y-%m-%d %H:%M:%S")
+                    ts_str = datetime.strftime(
+                        datetime.now(timezone.utc), "%Y-%m-%d %H:%M:%S"
+                    )
                     print(
                         ",".join(
                             [
@@ -158,7 +160,9 @@ def main(host):
 
                 # 403 bad request
                 if response.status_code != 200:
-                    ts_str = datetime.strftime(datetime.now(timezone.utc), "%Y-%m-%d %H:%M:%S")
+                    ts_str = datetime.strftime(
+                        datetime.now(timezone.utc), "%Y-%m-%d %H:%M:%S"
+                    )
                     print(
                         ",".join(
                             [
@@ -195,7 +199,9 @@ def main(host):
 
                 # 403 unauthorized or 404 Not Found
                 if response.status_code != 204:
-                    ts_str = datetime.strftime(datetime.now(timezone.utc), "%Y-%m-%d %H:%M:%S")
+                    ts_str = datetime.strftime(
+                        datetime.now(timezone.utc), "%Y-%m-%d %H:%M:%S"
+                    )
                     print(
                         ",".join(
                             [
@@ -232,7 +238,9 @@ def main(host):
 
                 # 403 unauthorized or 404 Not Found
                 if response.status_code != 204:
-                    ts_str = datetime.strftime(datetime.now(timezone.utc), "%Y-%m-%d %H:%M:%S")
+                    ts_str = datetime.strftime(
+                        datetime.now(timezone.utc), "%Y-%m-%d %H:%M:%S"
+                    )
                     print(
                         ",".join(
                             [
@@ -267,7 +275,9 @@ def main(host):
                 # error handling (204 success, 403 failure)
                 # 403 unauthorized
                 if response.status_code != 204:
-                    ts_str = datetime.strftime(datetime.now(timezone.utc), "%Y-%m-%d %H:%M:%S")
+                    ts_str = datetime.strftime(
+                        datetime.now(timezone.utc), "%Y-%m-%d %H:%M:%S"
+                    )
                     print(
                         ",".join(
                             [
@@ -284,7 +294,9 @@ def main(host):
 
             else:
                 # throw exception. Should not be hit
-                ts_str = datetime.strftime(datetime.now(timezone.utc), "%Y-%m-%d %H:%M:%S")
+                ts_str = datetime.strftime(
+                    datetime.now(timezone.utc), "%Y-%m-%d %H:%M:%S"
+                )
                 print(
                     ",".join(
                         [

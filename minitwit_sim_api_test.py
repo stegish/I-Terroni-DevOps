@@ -18,7 +18,8 @@ HEADERS = {
     "Authorization": f"Basic {ENCODED_CREDENTIALS}",
 }
 
-blub = "Blub!" #fix by SonarQube
+blub = "Blub!"  # fix by SonarQube
+
 
 def init_db():
     """Creates the database tables."""
@@ -62,6 +63,7 @@ def test_register():
     # verify that latest was updated
     response = requests.get(f"{BASE_URL}/latest", headers=HEADERS)
     assert response.json()["latest"] == 1
+
 
 def test_create_msg():
     username = "a"
