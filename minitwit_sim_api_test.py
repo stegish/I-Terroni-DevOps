@@ -18,6 +18,7 @@ HEADERS = {
     "Authorization": f"Basic {ENCODED_CREDENTIALS}",
 }
 
+blub = "Blub!" #fix by SonarQube
 
 def init_db():
     """Creates the database tables."""
@@ -57,16 +58,14 @@ def test_register():
         f"{BASE_URL}/register", data=json.dumps(data), headers=HEADERS, params=params
     )
     assert response.ok
-    # TODO: add another assertion that it is really there
 
     # verify that latest was updated
     response = requests.get(f"{BASE_URL}/latest", headers=HEADERS)
     assert response.json()["latest"] == 1
 
-
 def test_create_msg():
     username = "a"
-    data = {"content": "Blub!"}
+    data = {"content": blub}
     url = f"{BASE_URL}/msgs/{username}"
     params = {"latest": 2}
     response = requests.post(url, data=json.dumps(data), headers=HEADERS, params=params)
@@ -87,7 +86,7 @@ def test_get_latest_user_msgs():
 
     got_it_earlier = False
     for msg in response.json():
-        if msg["content"] == "Blub!" and msg["user"] == username:
+        if msg["content"] == blub and msg["user"] == username:
             got_it_earlier = True
 
     assert got_it_earlier
@@ -106,7 +105,7 @@ def test_get_latest_msgs():
 
     got_it_earlier = False
     for msg in response.json():
-        if msg["content"] == "Blub!" and msg["user"] == username:
+        if msg["content"] == blub and msg["user"] == username:
             got_it_earlier = True
 
     assert got_it_earlier
@@ -126,7 +125,6 @@ def test_register_b():
         f"{BASE_URL}/register", data=json.dumps(data), headers=HEADERS, params=params
     )
     assert response.ok
-    # TODO: add another assertion that it is really there
 
     # verify that latest was updated
     response = requests.get(f"{BASE_URL}/latest", headers=HEADERS)
