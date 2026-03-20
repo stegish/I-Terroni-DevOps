@@ -45,11 +45,20 @@ jobs:
           docker build -t ${{ secrets.DOCKER_USERNAME }}/minitwittestimage -f Dockerfile-minitwit-tests .
           echo "DATABASE_URL=sqlite:///tmp/minitwit.db" > .env
           yes 2>/dev/null | docker compose up -d
-          
+          docker run -d --name selenium --network=host selenium/standalone-chrome:latest
+
           echo "waiting on port 8080..."
-          timeout 30s bash -c 'until curl -s http://localhost:8080 > /dev/null; do echo "waitin..."; sleep 2; done'
-          
-          docker run --rm --network=host ${{ secrets.DOCKER_USERNAME }}/minitwittestimage
+          timeout 60s bash -c 'until curl -s http://localhost:8080 > /dev/null; do echo "waiting..."; sleep 2; done'
+
+          echo "waiting for selenium..."
+          timeout 30s bash -c 'until curl -s http://localhost:4444/wd/hub/status > /dev/null; do echo "waiting..."; sleep 2; done'
+
+          docker run --rm --network=host \
+            -e BASE_URL=http://localhost:8080 \
+            -e GUI_URL=http://localhost:8080 \
+            -e SELENIUM_HUB=http://localhost:4444/wd/hub \
+            -e DATABASE_URL=sqlite:///tmp/minitwit.db \
+            ${{ secrets.DOCKER_USERNAME }}/minitwittestimage
 
       - name: Configure SSH
         run: |
