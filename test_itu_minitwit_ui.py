@@ -15,13 +15,13 @@ DATABASE_URL = os.environ.get("DATABASE_URL",  "sqlite:////app/tmp/minitwit.db")
 
 def _register_user_via_gui(driver, data):
     driver.get(GUI_URL + "/register")
-    wait = WebDriverWait(driver, 5)
+    wait = WebDriverWait(driver, 10)
     wait.until(EC.presence_of_all_elements_located((By.CLASS_NAME, "actions")))
     input_fields = driver.find_elements(By.TAG_NAME, "input")
     for idx, str_content in enumerate(data):
         input_fields[idx].send_keys(str_content)
-    input_fields[4].send_keys(Keys.RETURN)
-    wait = WebDriverWait(driver, 5)
+    input_fields[3].send_keys(Keys.RETURN)
+    wait = WebDriverWait(driver, 10)
     flashes = wait.until(EC.presence_of_all_elements_located((By.CLASS_NAME, "flashes")))
     return flashes
 
