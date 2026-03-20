@@ -62,25 +62,30 @@ def test_register_user_via_gui():
     This is a UI test. It only interacts with the UI that is rendered in the browser and checks that visual
     responses that users observe are displayed.
     """
-    driver = _make_driver()
-    generated_msg = _register_user_via_gui(driver, ["Me", "me@some.where", "secure123", "secure123"])[0].text
-    expected_msg = "You were successfully registered and can login now"
-    assert generated_msg == expected_msg
-    driver.quit()
-    # cleanup, make test case idempotent
     _delete_user_by_name("Me")
+    driver = _make_driver()
+    try:
+        generated_msg = _register_user_via_gui(driver, ["Me", "me@some.where", "secure123", "secure123"])[0].text
+        expected_msg = "You were successfully registered and can login now"
+        assert generated_msg == expected_msg
+    finally:
+        driver.quit()
+        _delete_user_by_name("Me")
+
 
 def test_register_user_via_gui_and_check_db_entry():
     """
     This is an end-to-end test. Before registering a user via the UI, it checks that no such user exists in the
     database yet. After registering a user, it checks that the respective user appears in the database.
     """
-    driver = _make_driver()
-    assert _get_user_by_name("Me") == None
-    generated_msg = _register_user_via_gui(driver, ["Me", "me@some.where", "secure123", "secure123"])[0].text
-    expected_msg = "You were successfully registered and can login now"
-    assert generated_msg == expected_msg
-    assert _get_user_by_name("Me").username == "Me"
-    driver.quit()
-    # cleanup, make test case idempotent
     _delete_user_by_name("Me")
+    driver = _make_driver()
+    try:
+        assert _get_user_by_name("Me") is None
+        generated_msg = _register_user_via_gui(driver, ["Me", "me@some.where", "secure123", "secure123"])[0].text
+        expected_msg = "You were successfully registered and can login now"
+        assert generated_msg == expected_msg
+        assert _get_user_by_name("Me").username == "Me"
+    finally:
+        driver.quit()
+        _delete_user_by_name("Me")
