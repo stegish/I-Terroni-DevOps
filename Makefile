@@ -6,3 +6,13 @@ build:
 
 clean:
 	rm flag_tool
+
+lint:
+	pip install ruff
+	ruff check .
+	ruff format --check .
+
+lint-fix:
+	ruff check --fix .
+	ruff format .
+

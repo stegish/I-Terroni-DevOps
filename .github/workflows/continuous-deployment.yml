@@ -15,6 +15,41 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
+## static analysis
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: ruff check (linter)
+        run: ruff check .
+
+      - name: ruff format (formatter check)
+        run: ruff format --check .
+
+      - name: hadolint (Dockerfile-minitwit)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile-minitwit
+
+      - name: hadolint (Dockerfile-flagtool)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile-flagtool
+
+      - name: hadolint (Dockerfile-minitwit-tests)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile-minitwit-tests
+
+      - name: shellcheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: '.'
+##
       - name: Login to Docker Hub
         uses: docker/login-action@v1
         with:
