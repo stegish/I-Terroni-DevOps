@@ -140,7 +140,7 @@ def api_user_msgs_get(request):
     username = request.matchdict["username"]
     user_id = get_user_id(request, username)
     if user_id is None:
-        raise HTTPNotFound()
+        return Response(json={"status": 404, "error_msg": "User not found"}, status=404)
 
     no = int(request.GET.get("no", 100))
     messages_query = (
@@ -172,7 +172,7 @@ def api_user_msgs_post(request):
     username = request.matchdict["username"]
     user_id = get_user_id(request, username)
     if user_id is None:
-        raise HTTPNotFound()
+        return Response(json={"status": 404, "error_msg": "User not found"}, status=404)
 
     try:
         data = request.json_body
@@ -210,7 +210,7 @@ def api_follows_get(request):
     username = request.matchdict["username"]
     user_id = get_user_id(request, username)
     if user_id is None:
-        raise HTTPNotFound()
+        return Response(json={"status": 404, "error_msg": "User not found"}, status=404)
 
     no = int(request.GET.get("no", 100))
     followers = (
@@ -233,7 +233,7 @@ def api_follows_post(request):
     username = request.matchdict["username"]
     user_id = get_user_id(request, username)
     if user_id is None:
-        raise HTTPNotFound()
+        return Response(json={"status": 404, "error_msg": "User not found"}, status=404)
 
     try:
         data = request.json_body
