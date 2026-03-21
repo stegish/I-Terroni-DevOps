@@ -172,7 +172,7 @@ def api_user_msgs_post(request):
     username = request.matchdict["username"]
     user_id = get_user_id(request, username)
     if user_id is None:
-       return Response(json={"status": 404, "error_msg": "User not found"}, status=404)
+        return Response(json={"status": 404, "error_msg": "User not found"}, status=404)
 
     try:
         data = request.json_body
