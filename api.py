@@ -31,7 +31,7 @@ def require_simulator_auth(request):
 def update_latest(request):
     """parses the (latest) query param and saves it to the database"""
     c_update_latest.inc()
-    parsed_latest = request.GET.get("latest")
+    parsed_latest = request.params.get("latest")
     if parsed_latest is not None:
         try:
             latest_val = int(parsed_latest)
