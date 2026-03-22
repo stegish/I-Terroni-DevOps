@@ -244,7 +244,7 @@ def api_follows_post(request):
         whom_username = data["follow"]
         whom_id = get_user_id(request, whom_username)
         if whom_id is None:
-            raise HTTPNotFound()
+            return Response(json={"status": 404, "error_msg": "User not found"}, status=404)
 
         check = (
             request.db.query(Follower)
@@ -260,7 +260,7 @@ def api_follows_post(request):
         whom_username = data["unfollow"]
         whom_id = get_user_id(request, whom_username)
         if whom_id is None:
-            raise HTTPNotFound()
+            return Response(status=204)
 
         follower = (
             request.db.query(Follower)
