@@ -65,7 +65,6 @@ def get_latest(request):
 @view_config(
     route_name="register",
     request_method="POST",
-    header="Authorization",
     renderer="json",
 )
 def api_register(request):
