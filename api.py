@@ -3,7 +3,7 @@ from datetime import datetime
 from pyramid.view import view_config
 from models import LatestCommand, User, Message, Follower
 from pyramid.response import Response
-from pyramid.httpexceptions import HTTPForbidden, HTTPNotFound
+from pyramid.httpexceptions import HTTPForbidden
 from werkzeug.security import generate_password_hash
 from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
 
