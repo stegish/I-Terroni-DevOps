@@ -133,4 +133,28 @@ We collect and visualize metrics using **Prometheus** and **Grafana**, split int
 
 Both dashboards are provisioned automatically via the `monitoring/` directory mounted into the Grafana container, so they are available immediately after `docker compose up`.
 
+### 9. Testing & Static Analysis
+
+We integrated three levels of automated testing into the CI pipeline as a quality gate, so if any test fails, deployment is blocked:
+
+* **Integration tests** ("minitwit_tests_refactor.py") : tests core app functionality (register, login, messages, follow/unfollow) via HTTP requests
+* **API tests** ("minitwit_sim_api_test.py") : tests the simulator REST endpoints (`/register`, `/msgs`, `/fllws`, `/latest`)
+* **UI & End-to-End tests** ("test_itu_minitwit_ui.py") : uses Selenium with a remote Chrome container to interact with the browser UI and verify user registration both visually (flash message) and functionally (login)
+
+#### Static Analysis
+
+We added three static analysis tools as quality gates, running before build and deploy:
+
+* **`ruff`** : Python linter, catches errors and bad practices
+* **`hadolint`** : Dockerfile linter, checks best practices for all three Dockerfiles
+* **`shellcheck`** : shell script linter, checks `control.sh` and `deploy.sh`
+
+**`hadolint`** and **`shellcheck`** run exclusively in CI since Dockerfiles and shell scripts change rarely and these tools are not straightforward to install on Windows.
+
+**`ruff`** is also available locally for a faster feedback loop. Rather than pushing to discover linting errors, we can run:
+```bash
+ruff check .
+```
+and see if there are specific errors in the code.
+
 > **AI Disclosure:** Portions of this codebase were generated or optimized using LLMs. All AI-generated logic has been reviewed and tested for accuracy and security.
