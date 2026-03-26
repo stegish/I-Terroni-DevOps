@@ -79,7 +79,8 @@ def add_global_renderer_globals(event):
     event["get_flashed_messages"] = lambda: request.session.pop_flash()
     event["url_for"] = url_for
 
-    event['flash_messages'] = request.session.pop_flash()
+    flashes = request.session.pop_flash()
+    event['get_flashed_messages'] = lambda: flashes
 
 
 @view_config(route_name="timeline", renderer="templates/timeline_refactor.html")
