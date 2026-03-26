@@ -79,6 +79,8 @@ def add_global_renderer_globals(event):
     event["get_flashed_messages"] = lambda: request.session.pop_flash()
     event["url_for"] = url_for
 
+    event['flash_messages'] = request.session.pop_flash()
+
 
 @view_config(route_name="timeline", renderer="templates/timeline_refactor.html")
 def timeline(request):
@@ -346,7 +348,7 @@ with Configurator() as config:
     config.add_jinja2_search_path("templates")
     config.commit()
     setup_logging()
-    
+
     jinja_env = config.get_jinja2_environment(name=".html")
     jinja_env.filters["datetimeformat"] = format_datetime
     jinja_env.filters["gravatar"] = gravatar_url
