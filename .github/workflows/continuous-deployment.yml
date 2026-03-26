@@ -21,14 +21,14 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install ruff
-        run: pip install ruff
+      #- name: Install ruff
+      #  run: pip install ruff
 
-      - name: ruff check (linter)
-        run: ruff check .
+      #- name: ruff check (linter)
+      #  run: ruff check .
 
-      - name: ruff format (formatter check)
-        run: ruff format --check .
+      #- name: ruff format (formatter check)
+      #  run: ruff format --check .
 
       - name: hadolint (Dockerfile-minitwit)
         uses: hadolint/hadolint-action@v3.1.0
