@@ -13,6 +13,10 @@ from pyramid.events import NewRequest, subscriber, BeforeRender
 from wsgiref.simple_server import make_server
 from werkzeug.security import check_password_hash, generate_password_hash
 
+import logging
+import sys
+import json_log_formatter
+
 # Configuration
 PER_PAGE = 30
 SECRET_KEY = os.environ.get("SECRET_KEY", "development key")
@@ -326,12 +330,23 @@ def logout(request):
     request.session.flash("You were logged out")
     return HTTPFound(location=request.route_url("public_timeline"))
 
+def setup_logging():
+    formatter = json_log_formatter.JSONFormatter()
+
+    json_handler = logging.StreamHandler(sys.stdout)
+    json_handler.setFormatter(formatter)
+
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    logger.handlers = [json_handler]
 
 with Configurator() as config:
     config.include("pyramid_jinja2")
     config.add_jinja2_renderer(".html")
     config.add_jinja2_search_path("templates")
     config.commit()
+    setup_logging()
+    
     jinja_env = config.get_jinja2_environment(name=".html")
     jinja_env.filters["datetimeformat"] = format_datetime
     jinja_env.filters["gravatar"] = gravatar_url

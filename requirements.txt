@@ -7,3 +7,4 @@ prometheus-client
 pymysql
 cryptography
 selenium
+json-log-formatter

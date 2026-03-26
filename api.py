@@ -9,6 +9,9 @@ from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
 
 from db import get_user_id
 
+import logging
+logger = logging.getLogger(__name__)
+
 # Define Prometheus counters
 c_update_latest = Counter("minitwit_fct_update_latest_total", "Calls to update_latest")
 c_register = Counter("minitwit_fct_register_total", "Calls to register")
@@ -76,6 +79,7 @@ def api_register(request):
     try:
         data = request.json_body
     except ValueError:
+        logger.warning("Invalid JSON in register", extra={"route": "register"})
         return Response(json={"status": 400, "error_msg": "Invalid JSON"}, status=400)
 
     username = data.get("username")
@@ -93,6 +97,10 @@ def api_register(request):
         error = "The username is already taken"
 
     if error:
+        logger.info(
+            "Register failed", 
+            extra={"route": "register", "username": username, "reason": error}
+        )
         return Response(json={"status": 400, "error_msg": error}, status=400)
 
     new_user = User(
@@ -100,12 +108,18 @@ def api_register(request):
     )
     request.db.add(new_user)
     request.db.commit()
+
+    logger.info(
+        "User registered successfully", 
+        extra={"route": "register", "username": username}
+    )
     return Response(status=204)
 
 
 @view_config(route_name="api_msgs", request_method="GET", renderer="json")
 def api_msgs(request):
     """get recent messages"""
+    logger.info("Fetching recent messages", extra={"route": "api_msgs", "no": request.GET.get("no", 100)})
     update_latest(request)
     require_simulator_auth(request)
 
@@ -127,19 +141,25 @@ def api_msgs(request):
         }
         for msg, usr in messages_query
     ]
+    
+    logger.info("Recent messages fetched", extra={"route": "api_msgs", "count": len(results)})
     return results
+
 
 
 @view_config(route_name="api_user_msgs", request_method="GET", renderer="json")
 def api_user_msgs_get(request):
     """get messages for a specific user"""
+    username = request.matchdict["username"]
+    logger.info("Fetching user messages", extra={"route": "api_user_msgs", "username": username, "no": request.GET.get("no", 100)})
+    
     c_add_message.inc()
     update_latest(request)
     require_simulator_auth(request)
 
-    username = request.matchdict["username"]
     user_id = get_user_id(request, username)
     if user_id is None:
+        logger.warning("User not found", extra={"route": "api_user_msgs", "username": username})
         return Response(json={"status": 404, "error_msg": "User not found"}, status=404)
 
     no = int(request.GET.get("no", 100))
@@ -160,23 +180,29 @@ def api_user_msgs_get(request):
         }
         for msg, usr in messages_query
     ]
+    
+    logger.info("User messages fetched", extra={"route": "api_user_msgs", "username": username, "count": len(results)})
     return results
 
 
 @view_config(route_name="api_user_msgs", request_method="POST", renderer="json")
 def api_user_msgs_post(request):
     """post a new message as a specific user"""
+    username = request.matchdict["username"]
+    logger.info("Posting message", extra={"route": "api_user_msgs_post", "username": username})
+    
     update_latest(request)
     require_simulator_auth(request)
 
-    username = request.matchdict["username"]
     user_id = get_user_id(request, username)
     if user_id is None:
+        logger.warning("User not found for posting", extra={"route": "api_user_msgs_post", "username": username})
         return Response(json={"status": 404, "error_msg": "User not found"}, status=404)
 
     try:
         data = request.json_body
     except ValueError:
+        logger.warning("Invalid JSON body", extra={"route": "api_user_msgs_post", "username": username})
         return Response(json={"status": 400, "error_msg": "Invalid JSON"}, status=400)
 
     content = data.get("content")
@@ -186,8 +212,12 @@ def api_user_msgs_post(request):
         )
         request.db.add(new_msg)
         request.db.commit()
+        logger.info("Message posted", extra={"route": "api_user_msgs_post", "username": username, "content_length": len(content)})
+    else:
+        logger.info("Empty content ignored", extra={"route": "api_user_msgs_post", "username": username})
 
     return Response(status=204)
+
 
 
 @view_config(route_name="api_metrics", request_method="GET", renderer="json")
@@ -204,15 +234,18 @@ def api_metrics(request):
 @view_config(route_name="api_follows", request_method="GET", renderer="json")
 def api_follows_get(request):
     """get list of users followed by the given user"""
+    username = request.matchdict["username"]
+    no = int(request.GET.get("no", 100))
+    logger.info("Fetching follows", extra={"route": "api_follows_get", "username": username, "no": no})
+    
     update_latest(request)
     require_simulator_auth(request)
 
-    username = request.matchdict["username"]
     user_id = get_user_id(request, username)
     if user_id is None:
+        logger.warning("User not found", extra={"route": "api_follows_get", "username": username})
         return Response(json={"status": 404, "error_msg": "User not found"}, status=404)
 
-    no = int(request.GET.get("no", 100))
     followers = (
         request.db.query(User.username)
         .join(Follower, Follower.whom_id == User.user_id)
@@ -220,33 +253,41 @@ def api_follows_get(request):
         .limit(no)
         .all()
     )
-
-    return {"follows": [row[0] for row in followers]}
+    
+    follows_list = [row[0] for row in followers]
+    logger.info("Follows fetched", extra={"route": "api_follows_get", "username": username, "count": len(follows_list)})
+    
+    return {"follows": follows_list}
 
 
 @view_config(route_name="api_follows", request_method="POST", renderer="json")
 def api_follows_post(request):
     """follow or unfollow a user"""
+    username = request.matchdict["username"]
+    logger.info("Follow action", extra={"route": "api_follows_post", "username": username})
+    
     update_latest(request)
     require_simulator_auth(request)
 
-    username = request.matchdict["username"]
     user_id = get_user_id(request, username)
     if user_id is None:
+        logger.warning("User not found for follow", extra={"route": "api_follows_post", "username": username})
         return Response(json={"status": 404, "error_msg": "User not found"}, status=404)
 
     try:
         data = request.json_body
     except ValueError:
+        logger.warning("Invalid JSON", extra={"route": "api_follows_post", "username": username})
         return Response(json={"status": 400, "error_msg": "Invalid JSON"}, status=400)
 
+    action = None
     if "follow" in data:
+        action = "follow"
         whom_username = data["follow"]
         whom_id = get_user_id(request, whom_username)
         if whom_id is None:
-            return Response(
-                json={"status": 404, "error_msg": "User not found"}, status=404
-            )
+            logger.warning("Target user not found", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
+            return Response(json={"status": 404, "error_msg": "User not found"}, status=404)
 
         check = (
             request.db.query(Follower)
@@ -257,11 +298,16 @@ def api_follows_post(request):
             new_follower = Follower(who_id=user_id, whom_id=whom_id)
             request.db.add(new_follower)
             request.db.commit()
+            logger.info("Follow created", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
+        else:
+            logger.info("Follow already exists", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
 
     elif "unfollow" in data:
+        action = "unfollow"
         whom_username = data["unfollow"]
         whom_id = get_user_id(request, whom_username)
         if whom_id is None:
+            logger.info("Target not found for unfollow (ignored)", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
             return Response(status=204)
 
         follower = (
@@ -272,8 +318,12 @@ def api_follows_post(request):
         if follower:
             request.db.delete(follower)
             request.db.commit()
+            logger.info("Follow removed", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
+        else:
+            logger.info("No follow to remove", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
 
     return Response(status=204)
+
 
 
 @view_config(route_name="prometheus_metrics", request_method="GET")
