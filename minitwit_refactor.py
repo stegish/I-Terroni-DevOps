@@ -42,7 +42,10 @@ def init_request(event):
     request.db = get_db_session()
 
     def close_db(request):
-        request.db.close()
+        try:
+            request.db.close()
+        except Exception:
+            pass
 
     request.add_finished_callback(close_db)
 

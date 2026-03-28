@@ -45,8 +45,10 @@ def update_latest(request):
             else:
                 cmd.value = latest_val
             request.db.commit()
-        except ValueError:
-            pass
+        except (ValueError, Exception) as e:
+            request.db.rollback()
+            if not isinstance(e, ValueError):
+                logger.warning("Failed to update latest", extra={"error": str(e)})
 
 
 def format_api_datetime(timestamp):
@@ -103,14 +105,19 @@ def api_register(request):
         )
         return Response(json={"status": 400, "error_msg": error}, status=400)
 
-    new_user = User(
-        username=username, email=email, pw_hash=generate_password_hash(password)
-    )
-    request.db.add(new_user)
-    request.db.commit()
+    try:
+        new_user = User(
+            username=username, email=email, pw_hash=generate_password_hash(password)
+        )
+        request.db.add(new_user)
+        request.db.commit()
+    except Exception:
+        request.db.rollback()
+        logger.warning("Failed to register user", extra={"route": "register", "username": username})
+        return Response(json={"status": 500, "error_msg": "Registration failed"}, status=500)
 
     logger.info(
-        "User registered successfully", 
+        "User registered successfully",
         extra={"route": "register", "username": username}
     )
     return Response(status=204)
@@ -207,12 +214,17 @@ def api_user_msgs_post(request):
 
     content = data.get("content")
     if content:
-        new_msg = Message(
-            author_id=user_id, text=content, pub_date=int(time.time()), flagged=0
-        )
-        request.db.add(new_msg)
-        request.db.commit()
-        logger.info("Message posted", extra={"route": "api_user_msgs_post", "username": username, "content_length": len(content)})
+        try:
+            new_msg = Message(
+                author_id=user_id, text=content, pub_date=int(time.time()), flagged=0
+            )
+            request.db.add(new_msg)
+            request.db.commit()
+            logger.info("Message posted", extra={"route": "api_user_msgs_post", "username": username, "content_length": len(content)})
+        except Exception:
+            request.db.rollback()
+            logger.warning("Failed to post message", extra={"route": "api_user_msgs_post", "username": username})
+            return Response(json={"status": 500, "error_msg": "Failed to post message"}, status=500)
     else:
         logger.info("Empty content ignored", extra={"route": "api_user_msgs_post", "username": username})
 
@@ -295,10 +307,14 @@ def api_follows_post(request):
             .first()
         )
         if not check:
-            new_follower = Follower(who_id=user_id, whom_id=whom_id)
-            request.db.add(new_follower)
-            request.db.commit()
-            logger.info("Follow created", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
+            try:
+                new_follower = Follower(who_id=user_id, whom_id=whom_id)
+                request.db.add(new_follower)
+                request.db.commit()
+                logger.info("Follow created", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
+            except Exception:
+                request.db.rollback()
+                logger.info("Follow already exists (concurrent)", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
         else:
             logger.info("Follow already exists", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
 
@@ -316,9 +332,13 @@ def api_follows_post(request):
             .first()
         )
         if follower:
-            request.db.delete(follower)
-            request.db.commit()
-            logger.info("Follow removed", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
+            try:
+                request.db.delete(follower)
+                request.db.commit()
+                logger.info("Follow removed", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
+            except Exception:
+                request.db.rollback()
+                logger.warning("Failed to remove follow", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
         else:
             logger.info("No follow to remove", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
 
