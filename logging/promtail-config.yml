@@ -15,5 +15,19 @@ scrape_configs:
         refresh_interval: 5s
     relabel_configs:
       - source_labels: ['__meta_docker_container_name']
+        regex: 'minitwit'
+        action: keep
+      - source_labels: ['__meta_docker_container_name']
         regex: '/(.*)'
         target_label: 'container'
+      - source_labels: ['__meta_docker_container_id']
+        target_label: 'docker_id'
+    pipeline_stages:
+      - json:
+          expressions:
+            level: level
+            message: message
+            route: route
+      - labels:
+          level:
+          route:

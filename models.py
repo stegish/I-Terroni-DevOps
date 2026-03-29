@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import Column, Integer, String, ForeignKey, Index
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
@@ -7,7 +7,7 @@ Base = declarative_base()
 class User(Base):
     __tablename__ = "user"
     user_id = Column(Integer, primary_key=True, autoincrement=True)
-    username = Column(String(255), nullable=False, unique=True)
+    username = Column(String(255), nullable=False, unique=True, index=True)
     email = Column(String(255), nullable=False)
     pw_hash = Column(String(255), nullable=False)
 

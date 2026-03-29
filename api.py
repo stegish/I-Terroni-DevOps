@@ -6,6 +6,7 @@ from pyramid.response import Response
 from pyramid.httpexceptions import HTTPForbidden
 from werkzeug.security import generate_password_hash
 from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from db import get_user_id
 
@@ -301,22 +302,26 @@ def api_follows_post(request):
             logger.warning("Target user not found", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
             return Response(json={"status": 404, "error_msg": "User not found"}, status=404)
 
-        check = (
-            request.db.query(Follower)
-            .filter(Follower.who_id == user_id, Follower.whom_id == whom_id)
-            .first()
-        )
-        if not check:
-            try:
+        try:
+            check = (
+                request.db.query(Follower)
+                .filter(Follower.who_id == user_id, Follower.whom_id == whom_id)
+                .first()
+            )
+            if not check:
                 new_follower = Follower(who_id=user_id, whom_id=whom_id)
                 request.db.add(new_follower)
                 request.db.commit()
                 logger.info("Follow created", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
-            except Exception:
-                request.db.rollback()
-                logger.info("Follow already exists (concurrent)", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
-        else:
-            logger.info("Follow already exists", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
+            else:
+                logger.info("Follow already exists", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
+        except IntegrityError:
+            request.db.rollback()
+            logger.info("Follow already exists (concurrent race condition)", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
+        except Exception as e:
+            request.db.rollback()
+            logger.error("Error during follow", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username, "error": str(e)})
+            return Response(json={"status": 500, "error_msg": "Internal server error"}, status=500)
 
     elif "unfollow" in data:
         action = "unfollow"
@@ -326,21 +331,26 @@ def api_follows_post(request):
             logger.info("Target not found for unfollow (ignored)", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
             return Response(status=204)
 
-        follower = (
-            request.db.query(Follower)
-            .filter(Follower.who_id == user_id, Follower.whom_id == whom_id)
-            .first()
-        )
-        if follower:
-            try:
+        try:
+            follower = (
+                request.db.query(Follower)
+                .filter(Follower.who_id == user_id, Follower.whom_id == whom_id)
+                .first()
+            )
+            if follower:
                 request.db.delete(follower)
                 request.db.commit()
                 logger.info("Follow removed", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
-            except Exception:
-                request.db.rollback()
-                logger.warning("Failed to remove follow", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
-        else:
-            logger.info("No follow to remove", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
+            else:
+                logger.info("No follow to remove", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
+        except IntegrityError:
+            request.db.rollback()
+            logger.error("Integrity error during unfollow", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
+            return Response(json={"status": 500, "error_msg": "Internal server error"}, status=500)
+        except Exception as e:
+            request.db.rollback()
+            logger.error("Error during unfollow", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username, "error": str(e)})
+            return Response(json={"status": 500, "error_msg": "Internal server error"}, status=500)
 
     return Response(status=204)
 
