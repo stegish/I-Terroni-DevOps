@@ -7,7 +7,9 @@ from pyramid.config import Configurator
 from pyramid.view import view_config
 from models import User, Message, Follower
 from db import get_db_session, get_user_id
-from pyramid.httpexceptions import HTTPFound, HTTPNotFound, HTTPForbidden
+from pyramid.httpexceptions import HTTPFound, HTTPNotFound, HTTPForbidden, HTTPInternalServerError
+from sqlalchemy.exc import IntegrityError
+from api import c_follow, c_unfollow
 from pyramid.session import SignedCookieSessionFactory
 from pyramid.events import NewRequest, subscriber, BeforeRender
 from wsgiref.simple_server import make_server
@@ -79,7 +81,6 @@ def add_global_renderer_globals(event):
             return request.route_url(endpoint, **values)
 
     event["user"] = request.user
-    event["get_flashed_messages"] = lambda: request.session.pop_flash()
     event["url_for"] = url_for
 
     flashes = request.session.pop_flash()
@@ -217,10 +218,18 @@ def follow_user(request):
     if whom_id is None:
         return HTTPNotFound()
 
-    new_follower = Follower(who_id=request.session["user_id"], whom_id=whom_id)
-    request.db.add(new_follower)
-    request.db.commit()
-    request.session.flash('You are now following "%s"' % username)
+    c_follow.inc()
+    try:
+        new_follower = Follower(who_id=request.session["user_id"], whom_id=whom_id)
+        request.db.add(new_follower)
+        request.db.commit()
+        request.session.flash('You are now following "%s"' % username)
+    except IntegrityError:
+        request.db.rollback()
+        request.session.flash('You are already following "%s"' % username)
+    except Exception as e:
+        request.db.rollback()
+        request.session.flash("An error occurred while following the user")
     return HTTPFound(location=request.route_url("user_timeline", username=username))
 
 
@@ -235,17 +244,24 @@ def unfollow_user(request):
     if whom_id is None:
         return HTTPNotFound()
 
-    follower = (
-        request.db.query(Follower)
-        .filter(
-            Follower.who_id == request.session["user_id"], Follower.whom_id == whom_id
+    c_unfollow.inc()
+    try:
+        follower = (
+            request.db.query(Follower)
+            .filter(
+                Follower.who_id == request.session["user_id"], Follower.whom_id == whom_id
+            )
+            .first()
         )
-        .first()
-    )
-    if follower:
-        request.db.delete(follower)
-        request.db.commit()
-    request.session.flash('You are no longer following "%s"' % username)
+        if follower:
+            request.db.delete(follower)
+            request.db.commit()
+            request.session.flash('You are no longer following "%s"' % username)
+        else:
+            request.session.flash("You are not following this user")
+    except Exception as e:
+        request.db.rollback()
+        request.session.flash("An error occurred while unfollowing the user")
     return HTTPFound(location=request.route_url("user_timeline", username=username))
 
 

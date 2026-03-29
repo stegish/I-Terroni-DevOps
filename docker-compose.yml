@@ -51,6 +51,9 @@ services:
     image: grafana/loki:2.9.4
     ports:
       - "3100:3100"
+    volumes:
+      - ./logging/loki-config.yml:/etc/loki/local-config.yaml
+      - loki_data:/loki
     command: -config.file=/etc/loki/local-config.yaml
     restart: always
 
@@ -65,4 +68,4 @@ services:
 
 volumes:
   minitwit_data:
-  esdata:
+  loki_data:

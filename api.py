@@ -6,7 +6,7 @@ from pyramid.response import Response
 from pyramid.httpexceptions import HTTPForbidden
 from werkzeug.security import generate_password_hash
 from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
-from sqlalchemy.exc import IntegrityError, OperationalError
+from sqlalchemy.exc import IntegrityError
 
 from db import get_user_id
 
@@ -17,6 +17,8 @@ logger = logging.getLogger(__name__)
 c_update_latest = Counter("minitwit_fct_update_latest_total", "Calls to update_latest")
 c_register = Counter("minitwit_fct_register_total", "Calls to register")
 c_add_message = Counter("minitwit_fct_add_message_total", "Calls to add_message")
+c_follow = Counter("minitwit_fct_follow_total", "Calls to follow via API")
+c_unfollow = Counter("minitwit_fct_unfollow_total", "Calls to unfollow via API")
 
 
 def require_simulator_auth(request):
@@ -39,6 +41,10 @@ def update_latest(request):
     if parsed_latest is not None:
         try:
             latest_val = int(parsed_latest)
+        except ValueError:
+            return
+
+        try:
             cmd = request.db.query(LatestCommand).filter(LatestCommand.id == 1).first()
             if not cmd:
                 cmd = LatestCommand(id=1, value=latest_val)
@@ -46,10 +52,9 @@ def update_latest(request):
             else:
                 cmd.value = latest_val
             request.db.commit()
-        except (ValueError, Exception) as e:
+        except Exception as e:
             request.db.rollback()
-            if not isinstance(e, ValueError):
-                logger.warning("Failed to update latest", extra={"error": str(e)})
+            logger.warning("Failed to update latest", extra={"error": str(e)})
 
 
 def format_api_datetime(timestamp):
@@ -160,8 +165,7 @@ def api_user_msgs_get(request):
     """get messages for a specific user"""
     username = request.matchdict["username"]
     logger.info("Fetching user messages", extra={"route": "api_user_msgs", "username": username, "no": request.GET.get("no", 100)})
-    
-    c_add_message.inc()
+
     update_latest(request)
     require_simulator_auth(request)
 
@@ -207,6 +211,7 @@ def api_user_msgs_post(request):
         logger.warning("User not found for posting", extra={"route": "api_user_msgs_post", "username": username})
         return Response(json={"status": 404, "error_msg": "User not found"}, status=404)
 
+    c_add_message.inc()
     try:
         data = request.json_body
     except ValueError:
@@ -296,6 +301,7 @@ def api_follows_post(request):
     action = None
     if "follow" in data:
         action = "follow"
+        c_follow.inc()
         whom_username = data["follow"]
         whom_id = get_user_id(request, whom_username)
         if whom_id is None:
@@ -325,6 +331,7 @@ def api_follows_post(request):
 
     elif "unfollow" in data:
         action = "unfollow"
+        c_unfollow.inc()
         whom_username = data["unfollow"]
         whom_id = get_user_id(request, whom_username)
         if whom_id is None:
