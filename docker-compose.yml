@@ -1,6 +1,8 @@
 services:
   minitwit:
     image: michaelfant/minitwitimage:latest
+    env_file:
+      - .env
     ports:
       - "8080:5000"
     volumes:
@@ -21,7 +23,7 @@ services:
   prometheus:
     image: prom/prometheus:latest
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
       - "9090:9090"
     restart: always
@@ -31,8 +33,8 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./grafana/provisioning/:/etc/grafana/provisioning/
-      - ./grafana/dashboards/:/var/lib/grafana/dashboards/
+      - ./monitoring/grafana/provisioning/:/etc/grafana/provisioning/
+      - ./monitoring/grafana/dashboards/:/var/lib/grafana/dashboards/
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     depends_on:
@@ -45,5 +47,22 @@ services:
       - "9100:9100"
     restart: always
 
+  loki:
+    image: grafana/loki:2.9.4
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    restart: always
+
+  promtail:
+    image: grafana/promtail:2.9.4
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ./logging/promtail-config.yml:/etc/promtail/config.yml
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: -config.file=/etc/promtail/config.yml
+    restart: always
+
 volumes:
   minitwit_data:
+  esdata:

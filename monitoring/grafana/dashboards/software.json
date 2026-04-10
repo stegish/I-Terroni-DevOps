@@ -132,94 +132,16 @@
       ],
       "title": "Function Call Frequencies (Refactoring Candidates)",
       "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "Prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisLabel": "% Usage",
-            "drawStyle": "line",
-            "fillOpacity": 20,
-            "lineWidth": 2
-          },
-          "max": 100,
-          "min": 0,
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
-      "id": 3,
-      "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "single", "sort": "none" }
-      },
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "editorMode": "code",
-          "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[1m])) * 100)",
-          "legendFormat": "CPU Usage",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Server CPU Usage",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "Prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisLabel": "% Usage",
-            "drawStyle": "line",
-            "fillOpacity": 20,
-            "lineWidth": 2
-          },
-          "max": 100,
-          "min": 0,
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
-      "id": 4,
-      "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "single", "sort": "none" }
-      },
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "editorMode": "code",
-          "expr": "100 * (1 - ((avg_over_time(node_memory_MemFree_bytes[1m]) + avg_over_time(node_memory_Cached_bytes[1m]) + avg_over_time(node_memory_Buffers_bytes[1m])) / avg_over_time(node_memory_MemTotal_bytes[1m])))",
-          "legendFormat": "Memory Usage",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Server Memory Usage",
-      "type": "timeseries"
     }
   ],
   "refresh": "10s",
   "schemaVersion": 38,
   "style": "dark",
-  "tags": ["minitwit", "infrastructure"],
+  "tags": ["minitwit", "software"],
   "templating": { "list": [] },
   "time": { "from": "now-30m", "to": "now" },
   "timezone": "browser",
-  "title": "MiniTwit Operations Dashboard",
-  "uid": "minitwit-ops-dash",
+  "title": "MiniTwit Software Dashboard",
+  "uid": "minitwit-software-dash",
   "version": 1
 }

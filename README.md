@@ -2,6 +2,30 @@
 
 Welcome to the **I-Terroni-DevOps** repository for the ITU-MiniTwit application. This project is a micro-blogging platform built with Pyramid and deployed automatically using Docker and Vagrant on DigitalOcean.
 
+## Why Pyramid over Flask/Bottle
+We didn't use **Bottle + Jinja2** because it requires manually integrating two separate tools—a micro-framework and a template engine.
+
+Flask improves on this but relies on global state (g object), making testing harder—you need to simulate Flask's application context.
+
+We eventually chose Pyramid because:
+
+*Explicit request object*: Attach DB/sessions directly to request.db, clean and testable
+
+*Consistent structure*: Built-in Jinja2 (pyramid_jinja2), routing, and comprehensive docs
+
+## Database Abstraction Layer (SQLAlchemy)
+
+Without abstraction, our code was full with raw SQL queries written directly in functions: `SELECT * FROM user WHERE id=?`. This created chaos—changing databases meant rewriting everything, we risked SQL injection, and business logic got mixed up with SQL strings.
+
+We fixed it with three distinct layers:
+
+**db.py** handles only database connections. It's the single file that imports `sqlite3`.
+
+**models.py** defines User and Message as Python objects. SQLAlchemy automatically translates them into tables and correct queries.
+
+**App functions** now contain only business logic: they ask models for data using simple calls like `User.query.filter_by(id=1).first()`.
+
+
 ## Infrastructure & Deployment Documentation
 
 We deploy our software using a Virtual Machine (Droplet) hosted on **DigitalOcean**, fully automated via **Vagrant** (Infrastructure as Code). 
@@ -68,15 +92,69 @@ If all tests pass, the application API is correctly tracking the latest variable
 
 ### 6. Continuous Integration & Deployment (CI/CD)
 
-We have transitioned from manual, local builds on the server to a fully automated CI/CD pipeline using **GitHub Actions** and **Docker Hub**. 
+We have transitioned from manual, local builds on the server to a fully automated CI/CD pipeline using **GitHub Actions** and **Docker Hub**. Vagrant serves as our Infrastructure as Code (IaC) tool for **initial provisioning** of the DigitalOcean Droplet. It automates VM creation (`vagrant up --provider=digital_ocean`), Docker installation, and SSH setup via API calls. Post-setup, GitHub Actions handles daily deploys directly via SSH (`deploy.sh`)
 
 #### Architecture Updates
-* **Decoupled Dockerfiles**: We split the original monolithic `Dockerfile` into three distinct images: `Dockerfile-minitwit`, `Dockerfile-flagtool`, and `Dockerfile-minitwit-tests`.
+* **Decoupled Dockerfiles**: We split the original monolithic `Dockerfile` into three distinct images: `Dockerfile-minitwit`, `Dockerfile-flagtool`, and `Dockerfile-minitwit-tests`. Each image has a different purpose and lifecycle: `Dockerfile-minitwit` is the production image deployed to the server; `Dockerfile-minitwit-tests` runs exclusively in the CI pipeline and never reaches production, keeping test dependencies and debug code out of the final image; `Dockerfile-flagtool` is an administration utility used independently. This separation reduces image size and allows the CI pipeline to build and test in parallel, deploying only what is strictly necessary.
 
 #### Why GitHub Actions?
 Since our codebase is already hosted on GitHub and we deploy to DigitalOcean, GitHub Actions was the natural choice for our CD pipeline. It provides several key benefits for our workflow:
 * **Easy Automation**: The entire pipeline is defined in a single YAML file. It automatically kicks off whenever a developer pushes to the `main` branch.
 * **All-in-One Pipeline**: It seamlessly handles building the code, running our Pytest suite, pushing the compiled images to Docker Hub, and triggering the deployment script on our DigitalOcean Droplet via SSH.
 * **Cost-Effective**: It requires no external Jenkins/Bamboo servers to maintain and is completely free for public repositories, making it the perfect fit for our project.
+
+### 7. Database Migration (SQLite → MySQL)
+
+We migrated the production database from SQLite to a **DigitalOcean Managed MySQL 8** instance. Each collaborator must add the `DATABASE_URL` to their local `.env` file using this template:
+```
+DATABASE_URL=mysql+pymysql://<username>:<password>@<host>:25060/<name_database>
+```
+
+The connection string is available in the DigitalOcean control panel under Databases → Connection Details.
+
+#### Test vs Production database
+
+The CI pipeline (GitHub Actions) uses **SQLite** for the test step, while production uses **MySQL**. This is an intentional and standard pattern for the following reasons:
+
+* No cost: SQLite runs locally in the runner with no external service needed
+* No whitelist issues: entirely in-process, no network involved
+* Fast: no connection latency during tests
+
+SQLAlchemy abstracts the difference between the two engines, so the same ORM models work on both without any code changes. The `DATABASE_URL` injected during tests is `sqlite:///tmp/minitwit.db`; the one injected at deploy time points to the DO MySQL instance via GitHub Secrets.
+
+During the migration to MySQL, the existing SQLite data was not transferred to the new database. As a result, the production database restarted empty and will be filled with the new data of the simulator (16.03.2026).
+
+### 8. Monitoring (Prometheus + Grafana)
+
+We collect and visualize metrics using **Prometheus** and **Grafana**, split into two dedicated dashboards:
+
+* **Hardware dashboard**: infrastructure-level metrics collected via `node-exporter` (CPU usage, memory, disk I/O, and network traffic) on the DigitalOcean Droplet.
+* **Software dashboard**: application-level metrics instrumented directly in the MiniTwit codebase via `prometheus-client` — (request counts, response times, and endpoint-level activity).
+
+Both dashboards are provisioned automatically via the `monitoring/` directory mounted into the Grafana container, so they are available immediately after `docker compose up`.
+
+### 9. Testing & Static Analysis
+
+We integrated three levels of automated testing into the CI pipeline as a quality gate, so if any test fails, deployment is blocked:
+
+* **Integration tests** ("minitwit_tests_refactor.py") : tests core app functionality (register, login, messages, follow/unfollow) via HTTP requests
+* **API tests** ("minitwit_sim_api_test.py") : tests the simulator REST endpoints (`/register`, `/msgs`, `/fllws`, `/latest`)
+* **UI & End-to-End tests** ("test_itu_minitwit_ui.py") : uses Selenium with a remote Chrome container to interact with the browser UI and verify user registration both visually (flash message) and functionally (login)
+
+#### Static Analysis
+
+We added three static analysis tools as quality gates, running before build and deploy:
+
+* **`ruff`** : Python linter, catches errors and bad practices
+* **`hadolint`** : Dockerfile linter, checks best practices for all three Dockerfiles
+* **`shellcheck`** : shell script linter, checks `control.sh` and `deploy.sh`
+
+**`hadolint`** and **`shellcheck`** run exclusively in CI since Dockerfiles and shell scripts change rarely and these tools are not straightforward to install on Windows.
+
+**`ruff`** is also available locally for a faster feedback loop. Rather than pushing to discover linting errors, we can run:
+```bash
+ruff check .
+```
+and see if there are specific errors in the code.
 
 > **AI Disclosure:** Portions of this codebase were generated or optimized using LLMs. All AI-generated logic has been reviewed and tested for accuracy and security.

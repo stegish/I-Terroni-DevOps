@@ -4,3 +4,4 @@ flag_tool
 mergefile.py
 merge.txt
 .env
+.vagrant/

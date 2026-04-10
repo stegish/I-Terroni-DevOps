@@ -14,15 +14,15 @@
     <a href="{{ url_for('login') }}">sign in</a>
   {% endif %}
   </div>
-  {% with flashes = request.session.pop_flash() %}
-    {% if flashes %}
-      <ul class=flashes>
-      {% for message in flashes %}
-        <li>{{ message }}
-      {% endfor %}
-      </ul>
-    {% endif %}
-  {% endwith %}
+  {% set flashes = get_flashed_messages() %}
+  {% if flashes %}
+    <ul class="flashes">
+    {% for message in flashes %}
+      <li>{{ message }}</li>
+    {% endfor %}
+    </ul>
+  {% endif %}
+
   <div class=body>
   {% block body %}{% endblock %}
   </div>

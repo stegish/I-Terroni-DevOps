@@ -15,6 +15,41 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
+## static analysis
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      #- name: Install ruff
+      #  run: pip install ruff
+
+      #- name: ruff check (linter)
+      #  run: ruff check .
+
+      #- name: ruff format (formatter check)
+      #  run: ruff format --check .
+
+      - name: hadolint (Dockerfile-minitwit)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile-minitwit
+
+      - name: hadolint (Dockerfile-flagtool)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile-flagtool
+
+      - name: hadolint (Dockerfile-minitwit-tests)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile-minitwit-tests
+
+      - name: shellcheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: '.'
+##
       - name: Login to Docker Hub
         uses: docker/login-action@v1
         with:
@@ -43,12 +78,22 @@ jobs:
       - name: Test minitwit
         run: |
           docker build -t ${{ secrets.DOCKER_USERNAME }}/minitwittestimage -f Dockerfile-minitwit-tests .
+          echo "DATABASE_URL=sqlite:///tmp/minitwit.db" > .env
           yes 2>/dev/null | docker compose up -d
-          
+          docker run -d --name selenium --network=host selenium/standalone-chrome:latest
+
           echo "waiting on port 8080..."
-          timeout 30s bash -c 'until curl -s http://localhost:8080 > /dev/null; do echo "waitin..."; sleep 2; done'
-          
-          docker run --rm --network=host ${{ secrets.DOCKER_USERNAME }}/minitwittestimage
+          timeout 60s bash -c 'until curl -s http://localhost:8080 > /dev/null; do echo "waiting..."; sleep 2; done'
+
+          echo "waiting for selenium..."
+          timeout 30s bash -c 'until curl -s http://localhost:4444/wd/hub/status > /dev/null; do echo "waiting..."; sleep 2; done'
+
+          docker run --rm --network=host \
+            -e BASE_URL=http://localhost:8080 \
+            -e GUI_URL=http://localhost:8080 \
+            -e SELENIUM_HUB=http://localhost:4444/wd/hub \
+            -e DATABASE_URL=sqlite:///tmp/minitwit.db \
+            ${{ secrets.DOCKER_USERNAME }}/minitwittestimage
 
       - name: Configure SSH
         run: |
@@ -63,11 +108,12 @@ jobs:
           DROPLET_IP: ${{ secrets.DROPLET_IP }}
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          scp -i ~/.ssh/minitwit.key -o StrictHostKeyChecking=no -r docker-compose.yml prometheus.yml grafana/ root@$DROPLET_IP:/vagrant/
-          
+          scp -i ~/.ssh/minitwit.key -o StrictHostKeyChecking=no -r docker-compose.yml monitoring/ logging/ root@$DROPLET_IP:/vagrant/
           ssh -i ~/.ssh/minitwit.key -o StrictHostKeyChecking=no root@$DROPLET_IP "
             cd /vagrant &&
+            echo "DATABASE_URL=$DATABASE_URL" >> .env &&
             sudo docker compose pull &&
             sudo docker compose up -d --remove-orphans
           "
