@@ -1,32 +1,48 @@
+version: '3.8'
+
 services:
   minitwit:
-    image: michaelfant/minitwitimage:latest
+    image: ${DOCKER_USERNAME}/minitwitimage:latest
     env_file:
       - .env
     ports:
       - "8080:5000"
     volumes:
       - minitwit_data:/app/tmp
-    restart: always
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000"]
       interval: 30s
       timeout: 10s
       retries: 3
+    deploy:
+      replicas: 3
+      update_config:
+        delay: 10s
+        order: start-first
+      restart_policy:
+        condition: any
 
   flagtool:
-    image: michaelfant/flagtoolimage:latest
+    image: ${DOCKER_USERNAME}/flagtoolimage:latest
     volumes:
       - minitwit_data:/app/tmp
-    restart: always
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - "node.role==manager"
 
   prometheus:
     image: prom/prometheus:latest
     volumes:
-    - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
       - "9090:9090"
-    restart: always
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - "node.role==manager"
 
   grafana:
     image: grafana/grafana:latest
@@ -39,20 +55,29 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     depends_on:
       - prometheus
-    restart: always
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - "node.role==manager"
 
   node-exporter:
     image: prom/node-exporter:latest
     ports:
       - "9100:9100"
-    restart: always
+    deploy:
+      mode: global
 
   loki:
     image: grafana/loki:2.9.4
     ports:
       - "3100:3100"
     command: -config.file=/etc/loki/local-config.yaml
-    restart: always
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - "node.role==manager"
 
   promtail:
     image: grafana/promtail:2.9.4
@@ -61,7 +86,8 @@ services:
       - ./logging/promtail-config.yml:/etc/promtail/config.yml
       - /var/run/docker.sock:/var/run/docker.sock
     command: -config.file=/etc/promtail/config.yml
-    restart: always
+    deploy:
+      mode: global
 
 volumes:
   minitwit_data:

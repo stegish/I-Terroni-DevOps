@@ -3,7 +3,7 @@ from sqlalchemy.orm import sessionmaker
 
 import os
 
-DATABASE_URI = os.environ.get("DATABASE_URL", "sqlite:///tmp/minitwit.db")
+DATABASE_URI = os.environ.get("DATABASE_URL", "")
 engine = create_engine(DATABASE_URI)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
