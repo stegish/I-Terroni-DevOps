@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   minitwit:
-    image: ${DOCKER_USERNAME}/minitwitimage:latest
+    image: michaelfant/minitwitimage:latest
     env_file:
       - .env
     ports:
@@ -23,7 +23,7 @@ services:
         condition: any
 
   flagtool:
-    image: ${DOCKER_USERNAME}/flagtoolimage:latest
+    image: michaelfant/flagtoolimage:latest
     volumes:
       - minitwit_data:/app/tmp
     deploy:
