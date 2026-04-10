@@ -76,6 +76,8 @@ jobs:
           tags: ${{ secrets.DOCKER_USERNAME }}/flagtoolimage:latest
 
       - name: Test minitwit
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         run: |
           docker build -t ${{ secrets.DOCKER_USERNAME }}/minitwittestimage -f Dockerfile-minitwit-tests .
           echo "DATABASE_URL=sqlite:///tmp/minitwit.db" > .env
