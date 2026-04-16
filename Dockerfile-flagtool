@@ -1,9 +1,9 @@
 FROM ubuntu:22.04
 
-RUN rm -rf /var/lib/apt/lists/* && \
-    apt-get clean && \
+# hadolint ignore=DL3008
+RUN apt-get clean && \
     apt-get update -o Acquire::Retries=5 -o Acquire::http::Timeout="20" && \
-    apt-get install -y \
+    apt-get install -y --no-install-recommends \
     gcc \
     libsqlite3-dev \
     && rm -rf /var/lib/apt/lists/*
