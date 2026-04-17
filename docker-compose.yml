@@ -22,7 +22,7 @@ services:
       resources:
         limits:
           cpus: '0.4'
-          memory: 350M
+          memory: 300M
         reservations:
           cpus: '0.25'
           memory: 128M
@@ -58,10 +58,10 @@ services:
       resources:
         limits:
           cpus: '0.3'
-          memory: 200M
+          memory: 150M
         reservations:
           cpus: '0.15'
-          memory: 80M
+          memory: 100M
 
   grafana:
     image: grafana/grafana:latest
