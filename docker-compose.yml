@@ -103,6 +103,30 @@ services:
           cpus: '0.05'
           memory: 32M
 
+  loki:
+    image: grafana/loki:2.9.4-alpine
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./monitoring/loki-local-config.yaml:/etc/loki/local-config.yaml
+      - loki_data:/loki
+    command:
+      - -config.file=/etc/loki/local-config.yaml
+    environment:
+      - GOGC=50
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - "node.role==manager"
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 100M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
   promtail:
     image: grafana/promtail:2.9.4
     volumes:
@@ -122,3 +146,4 @@ services:
 
 volumes:
   minitwit_data:
+  loki_data:
