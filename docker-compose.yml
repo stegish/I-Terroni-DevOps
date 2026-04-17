@@ -15,12 +15,19 @@ services:
       timeout: 10s
       retries: 3
     deploy:
-      replicas: 3
+      replicas: 2
       update_config:
         delay: 10s
         order: start-first
       restart_policy:
         condition: any
+      resources:
+        limits:
+          cpus: '0.4'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
 
   flagtool:
     image: michaelfant/flagtoolimage:latest
@@ -31,6 +38,13 @@ services:
       placement:
         constraints:
           - "node.role==manager"
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
 
   prometheus:
     image: prom/prometheus:latest
@@ -43,6 +57,13 @@ services:
       placement:
         constraints:
           - "node.role==manager"
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 200M
+        reservations:
+          cpus: '0.15'
+          memory: 100M
 
   grafana:
     image: grafana/grafana:latest
@@ -60,6 +81,13 @@ services:
       placement:
         constraints:
           - "node.role==manager"
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 200M
+        reservations:
+          cpus: '0.15'
+          memory: 100M
 
   node-exporter:
     image: prom/node-exporter:latest
@@ -67,17 +95,13 @@ services:
       - "9100:9100"
     deploy:
       mode: global
-
-  loki:
-    image: grafana/loki:2.9.4
-    ports:
-      - "3100:3100"
-    command: -config.file=/etc/loki/local-config.yaml
-    deploy:
-      replicas: 1
-      placement:
-        constraints:
-          - "node.role==manager"
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
+        reservations:
+          cpus: '0.05'
+          memory: 32M
 
   promtail:
     image: grafana/promtail:2.9.4
@@ -88,7 +112,13 @@ services:
     command: -config.file=/etc/promtail/config.yml
     deploy:
       mode: global
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
+        reservations:
+          cpus: '0.05'
+          memory: 32M
 
 volumes:
   minitwit_data:
-  esdata:
