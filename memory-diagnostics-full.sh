@@ -26,9 +26,9 @@ echo ""
 echo "4. INDIVIDUAL SERVICE MEMORY:"
 echo "---"
 for service in minitwit flagtool prometheus grafana loki node-exporter promtail; do
-    container_id=$(sudo docker ps --filter "label=com.docker.swarm.service.name=minitwit_stack_$service" -q | head -1)
+    container_id=$(sudo docker ps --filter "label=com.docker.swarm.service.name=minitwit_stack_${service}" -q | head -1)
     if [ -n "$container_id" ]; then
-        mem=$(sudo docker inspect $container_id --format='{{.State.Pid}}' | xargs -I {} cat /proc/{}/status 2>/dev/null | grep VmRSS | awk '{print $2}')
+        mem=$(sudo docker inspect "$container_id" --format='{{.State.Pid}}' | xargs -I {} cat /proc/{}/status 2>/dev/null | grep VmRSS | awk '{print $2}')
         if [ -n "$mem" ]; then
             mem_mb=$((mem / 1024))
             echo "$service: ${mem_mb}MB"
@@ -63,10 +63,10 @@ echo "---"
 loki_container=$(sudo docker ps --filter "label=com.docker.swarm.service.name=minitwit_stack_loki" -q | head -1)
 if [ -n "$loki_container" ]; then
     echo "Loki container running: $loki_container"
-    sudo docker stats $loki_container --no-stream
+    sudo docker stats "$loki_container" --no-stream
     echo ""
     echo "Loki chunks directory size:"
-    sudo docker exec $loki_container du -sh /loki/chunks 2>/dev/null || echo "Could not access /loki/chunks"
+    sudo docker exec "$loki_container" du -sh /loki/chunks 2>/dev/null || echo "Could not access /loki/chunks"
 else
     echo "❌ Loki container not running!"
 fi
@@ -82,7 +82,7 @@ echo "11. PROMETHEUS DATA SIZE:"
 echo "---"
 prometheus_container=$(sudo docker ps --filter "label=com.docker.swarm.service.name=minitwit_stack_prometheus" -q | head -1)
 if [ -n "$prometheus_container" ]; then
-    sudo docker exec $prometheus_container du -sh /prometheus 2>/dev/null || echo "Could not measure prometheus storage"
+    sudo docker exec "$prometheus_container" du -sh /prometheus 2>/dev/null || echo "Could not measure prometheus storage"
 fi
 echo ""
 
