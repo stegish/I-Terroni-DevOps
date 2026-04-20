@@ -1,15 +1,10 @@
 #!/bin/bash
 set -e
 
-echo "1. download images..."
+echo "1. Pulling latest images..."
 sudo docker compose pull
 
-echo "2. initializing docker Swarm..."
-if ! sudo docker info | grep -q "Swarm: active"; then
-    sudo docker swarm init --advertise-addr eth0 || true
-fi
-echo "3. start Swarm..."
-sudo docker compose down || true
-sudo docker stack deploy -c docker-compose.yml minitwit_stack
+echo "2. Deploying/Updating Swarm Stack..."
+sudo docker stack deploy --with-registry-auth -c docker-compose.yml minitwit_stack
 
 echo "Deploy finished!"
