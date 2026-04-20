@@ -23,8 +23,6 @@ services:
 
   flagtool:
     image: michaelfant/flagtoolimage:latest
-    volumes:
-      - minitwit_data:/app/tmp
     deploy:
       replicas: 1
       placement:
