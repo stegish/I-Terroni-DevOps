@@ -7,8 +7,7 @@ services:
       - .env
     ports:
       - "8080:5000"
-    volumes:
-      - minitwit_data:/app/tmp
+#    volumes:
 #    healthcheck:
 #      test: ["CMD", "curl", "-f", "http://localhost:5000"]
 #      interval: 30s
@@ -77,7 +76,6 @@ services:
       replicas: 1
       placement:
         constraints:
-          - "node.role==manager"
 
   promtail:
     image: grafana/promtail:2.9.4
@@ -90,5 +88,4 @@ services:
       mode: global
 
 volumes:
-  minitwit_data:
   esdata:
