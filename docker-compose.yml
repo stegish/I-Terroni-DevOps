@@ -15,6 +15,9 @@ services:
 #      retries: 3
     deploy:
       replicas: 3
+      resources:
+        reservations:
+          memory: 128M
       update_config:
         delay: 10s
         order: start-first
@@ -25,9 +28,9 @@ services:
     image: michaelfant/flagtoolimage:latest
     deploy:
       replicas: 1
-      placement:
-        constraints:
-          - "node.role==manager"
+      resources:
+        reservations:
+          memory: 50M
 
   prometheus:
     image: prom/prometheus:latest
@@ -37,9 +40,9 @@ services:
       - "9090:9090"
     deploy:
       replicas: 1
-      placement:
-        constraints:
-          - "node.role==manager"
+      resources:
+        reservations:
+          memory: 256M
 
   grafana:
     image: grafana/grafana:latest
@@ -54,9 +57,9 @@ services:
       - prometheus
     deploy:
       replicas: 1
-      placement:
-        constraints:
-          - "node.role==manager"
+      resources:
+        reservations:
+          memory: 128M
 
   node-exporter:
     image: prom/node-exporter:latest
@@ -64,6 +67,9 @@ services:
       - "9100:9100"
     deploy:
       mode: global
+      resources:
+        reservations:
+          memory: 32M
 
   loki:
     image: grafana/loki:2.9.4
@@ -72,6 +78,9 @@ services:
     command: -config.file=/etc/loki/local-config.yaml
     deploy:
       replicas: 1
+      resources:
+        reservations:
+          memory: 256M
 
   promtail:
     image: grafana/promtail:2.9.4
@@ -82,6 +91,9 @@ services:
     command: -config.file=/etc/promtail/config.yml
     deploy:
       mode: global
+      resources:
+        reservations:
+          memory: 32M
 
 volumes:
   esdata:
