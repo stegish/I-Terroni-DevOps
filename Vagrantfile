@@ -16,7 +16,7 @@ Vagrant.configure("2") do |config|
     override.ssh.private_key_path = ENV['DO_SSH_KEY_PATH']
 
     #server configuration
-    provider.image = 'ubuntu-22-04-x64'
+    provider.image = 'ubuntu-24-04-x64'
     provider.region = 'fra1'
     provider.size = 's-1vcpu-1gb'
   end

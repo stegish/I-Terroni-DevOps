@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
-cd /vagrant
+
+echo "1. Pulling latest images..."
 sudo docker compose pull
-sudo docker compose up -d
-echo "Deploy completato con successo!"
+
+echo "2. Deploying/Updating Swarm Stack..."
+sudo docker stack deploy --with-registry-auth -c docker-compose.yml minitwit_stack
+
+echo "Deploy finished!"

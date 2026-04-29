@@ -1,7 +1,9 @@
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
-# hadolint ignore=DL3008,DL3015
-RUN apt-get update && apt-get install -y \
+# hadolint ignore=DL3008
+RUN apt-get clean && \
+    apt-get update -o Acquire::Retries=5 -o Acquire::http::Timeout="20" && \
+    apt-get install -y --no-install-recommends \
     gcc \
     libsqlite3-dev \
     && rm -rf /var/lib/apt/lists/*

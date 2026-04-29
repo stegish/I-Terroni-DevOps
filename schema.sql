@@ -11,6 +11,8 @@ create table follower (
   who_id integer,
   whom_id integer
 );
+create index idx_follower_who_id on follower(who_id);
+create index idx_follower_whom_id on follower(whom_id);
 
 drop table if exists message;
 create table message (
@@ -20,3 +22,6 @@ create table message (
   pub_date integer,
   flagged integer
 );
+create index idx_message_pub_date on message(pub_date desc);
+create index idx_message_flagged on message(flagged);
+create index idx_message_author_id on message(author_id);
