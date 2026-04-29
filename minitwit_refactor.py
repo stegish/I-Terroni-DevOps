@@ -17,9 +17,42 @@ import logging
 import sys
 import json_log_formatter
 
+from metrics import (
+    http_requests_total,
+    http_request_duration_seconds,
+    http_errors_total,
+)
+
 # Configuration
 PER_PAGE = 30
 SECRET_KEY = os.environ.get("SECRET_KEY", "development key")
+
+
+def prometheus_tween_factory(handler, registry):
+    def tween(request):
+        if request.path == "/metrics":
+            return handler(request)
+
+        start = time.perf_counter()
+        status_code = 500
+        try:
+            response = handler(request)
+            status_code = response.status_code
+            return response
+        except Exception:
+            status_code = 500
+            raise
+        finally:
+            duration = time.perf_counter() - start
+            route = request.matched_route.name if request.matched_route else "unmatched"
+            method = request.method
+            status_str = str(status_code)
+            http_requests_total.labels(method=method, route=route, status=status_str).inc()
+            http_request_duration_seconds.labels(method=method, route=route).observe(duration)
+            if status_code >= 400:
+                http_errors_total.labels(route=route, status_class=f"{status_code // 100}xx").inc()
+
+    return tween
 
 
 def format_datetime(timestamp):
@@ -356,6 +389,8 @@ with Configurator() as config:
 
     session_factory = SignedCookieSessionFactory(SECRET_KEY)
     config.set_session_factory(session_factory)
+
+    config.add_tween("minitwit_refactor.prometheus_tween_factory")
 
     config.add_static_view(name="static", path="static")
     config.add_route("api_metrics", "/api/stats")
