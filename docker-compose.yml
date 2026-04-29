@@ -119,7 +119,6 @@ services:
 
 configs:
   promtail_config:
-    name: ${PROMTAIL_CONFIG_NAME:-promtail_config}
     external: true
 
 volumes:
