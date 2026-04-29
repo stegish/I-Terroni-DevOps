@@ -78,8 +78,10 @@ jobs:
       - name: Test minitwit
         run: |
           docker build -t ${{ secrets.DOCKER_USERNAME }}/minitwittestimage -f Dockerfile-minitwit-tests .
-          echo "DATABASE_URL=sqlite:///tmp/minitwit.db" > .env
-          yes 2>/dev/null | docker compose up --scale minitwit=1 -d
+          docker run -d --name minitwit \
+            -p 8080:5000 \
+            -e DATABASE_URL=sqlite:///tmp/minitwit.db \
+            ${{ secrets.DOCKER_USERNAME }}/minitwitimage:latest
           docker run -d --name selenium --network=host selenium/standalone-chrome:latest
 
           echo "waiting on port 8080..."
