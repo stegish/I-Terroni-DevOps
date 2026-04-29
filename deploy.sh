@@ -1,14 +1,23 @@
 #!/bin/bash
 set -e
 
-echo "2. Updating Docker Configs..."
-# Docker configs are immutable: to update, create a new one and remove the old one
-if sudo docker config inspect promtail_config > /dev/null 2>&1; then
-  sudo docker config rm promtail_config
+echo "1. Computing promtail config version..."
+HASH=$(sha256sum ./logging/promtail-config.yml | cut -c1-8)
+export PROMTAIL_CONFIG_NAME="promtail_config_${HASH}"
+
+echo "2. Ensuring config '${PROMTAIL_CONFIG_NAME}' exists..."
+if ! sudo docker config inspect "$PROMTAIL_CONFIG_NAME" > /dev/null 2>&1; then
+  sudo docker config create "$PROMTAIL_CONFIG_NAME" ./logging/promtail-config.yml
 fi
-sudo docker config create promtail_config ./logging/promtail-config.yml
 
 echo "3. Deploying/Updating Swarm Stack..."
 sudo docker stack deploy --with-registry-auth -c docker-compose.yml minitwit_stack
+
+echo "4. Cleaning up old promtail configs..."
+for c in $(sudo docker config ls --filter name=promtail_config_ --format '{{.Name}}'); do
+  if [ "$c" != "$PROMTAIL_CONFIG_NAME" ]; then
+    sudo docker config rm "$c" 2>/dev/null || true
+  fi
+done
 
 echo "Deploy finished!"
