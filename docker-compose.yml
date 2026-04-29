@@ -1,5 +1,10 @@
 version: '3.8'
 
+networks:
+  minitwit_net:
+    driver: overlay
+    attachable: true
+
 services:
   minitwit:
     image: michaelfant/minitwitimage:latest
@@ -7,12 +12,8 @@ services:
       - .env
     ports:
       - "8080:5000"
-#    volumes:
-#    healthcheck:
-#      test: ["CMD", "curl", "-f", "http://localhost:5000"]
-#      interval: 30s
-#      timeout: 10s
-#      retries: 3
+    networks:
+      - minitwit_net
     deploy:
       replicas: 3
       resources:
@@ -26,6 +27,8 @@ services:
 
   flagtool:
     image: michaelfant/flagtoolimage:latest
+    networks:
+      - minitwit_net
     deploy:
       replicas: 1
       resources:
@@ -38,8 +41,13 @@ services:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
       - "9090:9090"
+    networks:
+      - minitwit_net
     deploy:
       replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
       resources:
         reservations:
           memory: 256M
@@ -53,10 +61,13 @@ services:
       - ./monitoring/grafana/dashboards/:/var/lib/grafana/dashboards/
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
-    depends_on:
-      - prometheus
+    networks:
+      - minitwit_net
     deploy:
       replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
       resources:
         reservations:
           memory: 128M
@@ -65,6 +76,8 @@ services:
     image: prom/node-exporter:latest
     ports:
       - "9100:9100"
+    networks:
+      - minitwit_net
     deploy:
       mode: global
       resources:
@@ -76,8 +89,13 @@ services:
     ports:
       - "3100:3100"
     command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - minitwit_net
     deploy:
       replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
       resources:
         reservations:
           memory: 256M
@@ -86,14 +104,22 @@ services:
     image: grafana/promtail:2.9.4
     volumes:
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - ./logging/promtail-config.yml:/etc/promtail/config.yml
       - /var/run/docker.sock:/var/run/docker.sock
+    configs:
+      - source: promtail_config
+        target: /etc/promtail/config.yml
     command: -config.file=/etc/promtail/config.yml
+    networks:
+      - minitwit_net
     deploy:
       mode: global
       resources:
         reservations:
           memory: 32M
+
+configs:
+  promtail_config:
+    external: true
 
 volumes:
   esdata:
