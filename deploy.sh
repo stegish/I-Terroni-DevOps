@@ -1,9 +1,6 @@
 #!/bin/bash
 set -e
 
-echo "1. Pulling latest images..."
-sudo docker compose pull
-
 echo "2. Updating Docker Configs..."
 # Docker configs are immutable: to update, create a new one and remove the old one
 if sudo docker config inspect promtail_config > /dev/null 2>&1; then
