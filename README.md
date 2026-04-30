@@ -160,7 +160,30 @@ These caps keep the manager droplet safe (~1 GB used out of 25 GB at steady stat
 
 Every service declares both `reservations` (minimum guaranteed) and `limits` (hard cap). Limits prevent a runaway container from killing the whole droplet via OOM.
 
-### 9. Testing & Static Analysis
+### 9. Schema Initialization (one-shot, decoupled from app boot)
+
+**Where it runs:** as a dedicated step in `deploy.sh`, before `docker stack deploy`. The same step is mirrored in the CI `test` job.
+
+**What it does:** runs `Base.metadata.create_all(bind=engine)` exactly once against MySQL via a throwaway container:
+```bash
+docker run --rm --env-file .env michaelfant/minitwitimage:latest \
+  python -c "from db import init_db; init_db()"
+```
+
+**Why it is no longer done on app boot.** Originally `db.py` called `init_db()` at module import time, so DDL ran every time the application started. With the move to Docker Swarm (3 `minitwit` replicas across 2 worker nodes, plus 3 gunicorn workers per replica) this race condition surfaced in production:
+
+```
+pymysql.err.OperationalError: (1684, "Table 'minitwit'.'latest_command'
+was skipped since its definition is being modified by concurrent DDL statement")
+```
+
+MySQL error **1684** is raised when two sessions try to alter or create the same table at the same time. With up to 9 processes (3 replicas × 3 workers) all calling `create_all()` in parallel during a `start-first` rolling deploy, the losers of the race crashed and Swarm flapped the service.
+
+**Rule going forward — best practice:** the application image must never run schema migrations on startup. DDL is a deploy-time concern, not a runtime concern, and must be performed by exactly one process. App containers assume the schema already exists.
+
+This pattern also matches how real migration tools (Alembic, Flyway, Liquibase) are run: as a separate, single-shot step in the pipeline, never embedded in the request-serving process.
+
+### 10. Testing & Static Analysis
 
 We integrated three levels of automated testing into the CI pipeline as a quality gate, so if any test fails, deployment is blocked:
 
@@ -200,7 +223,7 @@ make check         # full local CI mirror (lint)
 
 Tool configuration lives in `pyproject.toml`.
 
-### 10. Maintainability & Technical Debt (SonarCloud + Codacy)
+### 11. Maintainability & Technical Debt (SonarCloud + Codacy)
 
 We continuously measure maintainability and technical debt with two third-party services that scan every push and pull request:
 
