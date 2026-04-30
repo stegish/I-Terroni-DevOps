@@ -5,30 +5,42 @@ on:
     branches:
       - main
       - master
+  pull_request:
+    branches:
+      - main
+      - master
   workflow_dispatch:
 
 jobs:
-  build:
+  static-analysis:
+    name: Static Analysis (Quality Gate)
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
-## static analysis
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      #- name: Install ruff
-      #  run: pip install ruff
+      - name: Install lint tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff codespell mypy
 
-      #- name: ruff check (linter)
-      #  run: ruff check .
+      - name: ruff check (linter)
+        run: ruff check .
 
-      #- name: ruff format (formatter check)
-      #  run: ruff format --check .
+      - name: ruff format (formatter check)
+        run: ruff format --check .
+
+      - name: codespell (typo check)
+        run: codespell
+
+      - name: mypy (type check, non-blocking)
+        continue-on-error: true
+        run: mypy --ignore-missing-imports --install-types --non-interactive .
 
       - name: hadolint (Dockerfile-minitwit)
         uses: hadolint/hadolint-action@v3.1.0
@@ -49,38 +61,33 @@ jobs:
         uses: ludeeus/action-shellcheck@master
         with:
           scandir: '.'
-##
-      - name: Login to Docker Hub
-        uses: docker/login-action@v1
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+
+  test:
+    name: Test (Quality Gate)
+    needs: static-analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v3
 
-      - name: Build and push minitwitimage
-        uses: docker/build-push-action@v2
+      - name: Build minitwit image (local, not pushed)
+        uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile-minitwit
-          push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/minitwitimage:latest
+          push: false
+          load: true
+          tags: minitwitimage:ci
 
-      - name: Build and push flagtoolimage
-        uses: docker/build-push-action@v2
-        with:
-          context: .
-          file: ./Dockerfile-flagtool
-          push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/flagtoolimage:latest
-
-      - name: Test minitwit
+      - name: Run integration / API / UI / E2E tests
         env:
           MYSQL_ROOT_PASSWORD: testpass
           MYSQL_DATABASE: minitwit
         run: |
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/minitwittestimage -f Dockerfile-minitwit-tests .
+          docker build -t minitwittestimage -f Dockerfile-minitwit-tests .
 
           docker network create test-net
 
@@ -101,7 +108,7 @@ jobs:
           docker run -d --name minitwit --network test-net \
             -p 8080:5000 \
             -e DATABASE_URL="$DATABASE_URL" \
-            ${{ secrets.DOCKER_USERNAME }}/minitwitimage:latest
+            minitwitimage:ci
           docker run -d --name selenium --network=host selenium/standalone-chrome:latest
 
           echo "waiting on port 8080..."
@@ -120,7 +127,41 @@ jobs:
             -e BASE_URL=http://localhost:8080 \
             -e GUI_URL=http://localhost:8080 \
             -e SELENIUM_HUB=http://localhost:4444/wd/hub \
-            ${{ secrets.DOCKER_USERNAME }}/minitwittestimage
+            minitwittestimage
+
+  build-and-deploy:
+    name: Build, Push & Deploy
+    needs: test
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push minitwitimage
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile-minitwit
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/minitwitimage:latest
+
+      - name: Build and push flagtoolimage
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile-flagtool
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/flagtoolimage:latest
 
       - name: Configure SSH
         run: |

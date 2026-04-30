@@ -1,0 +1,26 @@
+---
+exclude_paths:
+  - '__pycache__/**'
+  - '*.pyc'
+  - '.vagrant/**'
+  - 'out/**'
+  - 'static/**'
+  - 'templates/**'
+  - 'simulator/**'
+  - 'monitoring/**'
+  - 'logging/**'
+  - '*.pdf'
+  - '*.svg'
+
+engines:
+  ruff:
+    enabled: true
+  pylint:
+    enabled: true
+    python_version: 3
+  bandit:
+    enabled: true
+  hadolint:
+    enabled: true
+  shellcheck:
+    enabled: true

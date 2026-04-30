@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 MiniTwit Tests
 ~~~~~~~~~~~~~~
@@ -11,7 +10,6 @@ Tests a MiniTwit application.
 """
 
 import requests
-
 
 # import schema
 # import data
@@ -61,9 +59,7 @@ def logout(http_session):
 
 def add_message(http_session, text):
     """Records a message"""
-    r = http_session.post(
-        f"{BASE_URL}/add_message", data={"text": text}, allow_redirects=True
-    )
+    r = http_session.post(f"{BASE_URL}/add_message", data={"text": text}, allow_redirects=True)
     if text:
         assert "Your message was recorded" in r.text
     return r

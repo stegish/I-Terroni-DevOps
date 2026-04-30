@@ -124,37 +124,101 @@ SQLAlchemy abstracts the difference between the two engines, so the same ORM mod
 
 During the migration to MySQL, the existing SQLite data was not transferred to the new database. As a result, the production database restarted empty and will be filled with the new data of the simulator (16.03.2026).
 
-### 8. Monitoring (Prometheus + Grafana)
+### 8. Monitoring, Logging & Cluster Topology
 
-We collect and visualize metrics using **Prometheus** and **Grafana**, split into two dedicated dashboards:
+We collect and visualize metrics with **Prometheus + Grafana** and logs with **Loki + Promtail**.
 
-* **Hardware dashboard**: infrastructure-level metrics collected via `node-exporter` (CPU usage, memory, disk I/O, and network traffic) on the DigitalOcean Droplet.
-* **Software dashboard**: application-level metrics instrumented directly in the MiniTwit codebase via `prometheus-client` — (request counts, response times, and endpoint-level activity).
+* **Hardware dashboard**: infrastructure-level metrics from `node-exporter` (CPU, memory, disk I/O, network traffic) on every Droplet.
+* **Software dashboard**: application-level metrics instrumented in MiniTwit via `prometheus-client` (request counts, response times, endpoint activity).
+* **Logs**: Promtail tails Docker container logs on each node and ships them to Loki, queryable from Grafana.
 
-Both dashboards are provisioned automatically via the `monitoring/` directory mounted into the Grafana container, so they are available immediately after `docker compose up`.
+Both dashboards are provisioned automatically via the `monitoring/` directory mounted into the Grafana container, so they are available immediately after `docker stack deploy`.
+
+#### Swarm topology (1 manager + 2 workers)
+
+The cluster is intentionally split so the manager is reserved for the observability stack and never competes with the application for RAM/CPU:
+
+| Service | Where it runs | Why |
+| --- | --- | --- |
+| `prometheus`, `grafana`, `loki` | **manager only** (`node.role == manager`) | Stateful — named volumes are bound to the manager so data survives redeploys. |
+| `minitwit` (3 replicas), `flagtool` | **workers only** (`node.role == worker`) | Stateless app workload, kept off the manager. `max_replicas_per_node: 2` forces a 2/1 spread across the two workers instead of all 3 landing on the same node. |
+| `node-exporter`, `promtail` | **every node** (`mode: global`) | One agent per node so per-host metrics and logs are collected. |
+
+Prometheus uses Swarm's built-in DNS service discovery (`tasks.minitwit`, `tasks.node-exporter`) to scrape **every** replica, not a single round-robin one.
+
+#### Persistence & retention
+
+| Stateful service | Volume | Retention |
+| --- | --- | --- |
+| Prometheus | `prometheus_data` → `/prometheus` | 7 days **OR** 512 MB on disk (whichever first) |
+| Loki | `loki_data` → `/loki` | 7 days, enforced by the compactor (see `monitoring/loki-config.yaml`) |
+| Grafana | `grafana_data` → `/var/lib/grafana` | unbounded (small DB: users, alerts, edited dashboards) |
+
+These caps keep the manager droplet safe (~1 GB used out of 25 GB at steady state).
+
+#### Resource limits
+
+Every service declares both `reservations` (minimum guaranteed) and `limits` (hard cap). Limits prevent a runaway container from killing the whole droplet via OOM.
 
 ### 9. Testing & Static Analysis
 
 We integrated three levels of automated testing into the CI pipeline as a quality gate, so if any test fails, deployment is blocked:
 
-* **Integration tests** ("minitwit_tests_refactor.py") : tests core app functionality (register, login, messages, follow/unfollow) via HTTP requests
-* **API tests** ("minitwit_sim_api_test.py") : tests the simulator REST endpoints (`/register`, `/msgs`, `/fllws`, `/latest`)
-* **UI & End-to-End tests** ("test_itu_minitwit_ui.py") : uses Selenium with a remote Chrome container to interact with the browser UI and verify user registration both visually (flash message) and functionally (login)
+* **Integration tests** (`minitwit_tests_refactor.py`) : tests core app functionality (register, login, messages, follow/unfollow) via HTTP requests
+* **API tests** (`minitwit_sim_api_test.py`) : tests the simulator REST endpoints (`/register`, `/msgs`, `/fllws`, `/latest`)
+* **UI & End-to-End tests** (`test_itu_minitwit_ui.py`) : uses Selenium with a remote Chrome container to interact with the browser UI and verify user registration both visually (flash message) and functionally (login)
+
+The pipeline is structured as three sequential jobs in `.github/workflows/continuous-deployment.yml`:
+
+1. **`static-analysis`** — runs all linters/formatters (see below)
+2. **`test`** — needs `static-analysis`; spins up MySQL + the app + Selenium and runs the full test suite
+3. **`build-and-deploy`** — needs `test`; only here are images pushed to Docker Hub and deployed to the Droplet
+
+This ordering guarantees that **broken images never reach Docker Hub** and that **deployment never happens on a failing test suite**.
 
 #### Static Analysis
 
-We added three static analysis tools as quality gates, running before build and deploy:
+We added five static analysis tools as quality gates, running before build and deploy:
 
-* **`ruff`** : Python linter, catches errors and bad practices
+* **`ruff`** : Python linter and formatter, catches errors, bad practices, unsorted imports
+* **`codespell`** : misspelling checker for source code and comments
+* **`mypy`** : Python static type checker (non-blocking — reports type issues without failing the build)
 * **`hadolint`** : Dockerfile linter, checks best practices for all three Dockerfiles
 * **`shellcheck`** : shell script linter, checks `control.sh` and `deploy.sh`
 
-**`hadolint`** and **`shellcheck`** run exclusively in CI since Dockerfiles and shell scripts change rarely and these tools are not straightforward to install on Windows.
+`hadolint` and `shellcheck` run exclusively in CI since Dockerfiles and shell scripts change rarely and these tools are not straightforward to install on Windows.
 
-**`ruff`** is also available locally for a faster feedback loop. Rather than pushing to discover linting errors, we can run:
+`ruff`, `codespell`, and `mypy` are also available locally via the `Makefile` for a faster feedback loop:
+
 ```bash
-ruff check .
+make install-dev   # one-time: install dev tooling
+make lint          # ruff check + ruff format --check + codespell
+make lint-fix      # auto-fix ruff issues + reformat
+make typecheck     # mypy
+make check         # full local CI mirror (lint)
 ```
-and see if there are specific errors in the code.
+
+Tool configuration lives in `pyproject.toml`.
+
+### 10. Maintainability & Technical Debt (SonarCloud + Codacy)
+
+We continuously measure maintainability and technical debt with two third-party services that scan every push and pull request:
+
+* **[SonarCloud](https://sonarcloud.io)** — provides a Maintainability rating, Reliability rating, Security rating, code smells, bugs, vulnerabilities, duplications, cyclomatic complexity, and the SQALE technical-debt index (in minutes/days).
+* **[Codacy](https://www.codacy.com)** — provides an aggregated quality grade based on multiple engines (`ruff`, `pylint`, `bandit`, `hadolint`, `shellcheck`).
+
+Both run in `.github/workflows/code-quality.yml` and require the following GitHub Actions secrets:
+
+| Secret | Where to obtain |
+| --- | --- |
+| `SONAR_TOKEN` | https://sonarcloud.io → Account → Security → Generate Token |
+| `CODACY_PROJECT_TOKEN` | https://app.codacy.com → Project → Settings → Integrations → Project API |
+
+Project configuration:
+
+* **`sonar-project.properties`** — declares Sonar project key, sources, test paths, and exclusions
+* **`.codacy.yml`** — declares Codacy excluded paths and enabled engines
+
+We react on the issues these tools surface: prominent items (security smells, duplicated blocks, high-complexity functions) are addressed; new code must not regress the metrics. New issues introduced in a PR will appear directly in the SonarCloud / Codacy PR check.
 
 > **AI Disclosure:** Portions of this codebase were generated or optimized using LLMs. All AI-generated logic has been reviewed and tested for accuracy and security.

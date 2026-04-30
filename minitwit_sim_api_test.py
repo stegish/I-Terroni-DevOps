@@ -1,7 +1,7 @@
-import json
 import base64
-import requests
+import json
 
+import requests
 
 BASE_URL = "http://localhost:8080/"
 USERNAME = "simulator"
@@ -38,9 +38,7 @@ def test_register():
     pwd = "a"
     data = {"username": username, "email": email, "pwd": pwd}
     params = {"latest": 1}
-    response = requests.post(
-        f"{BASE_URL}/register", data=json.dumps(data), headers=HEADERS, params=params
-    )
+    response = requests.post(f"{BASE_URL}/register", data=json.dumps(data), headers=HEADERS, params=params)
     assert response.ok
 
     # verify that latest was updated
@@ -106,9 +104,7 @@ def test_register_b():
     pwd = "b"
     data = {"username": username, "email": email, "pwd": pwd}
     params = {"latest": 5}
-    response = requests.post(
-        f"{BASE_URL}/register", data=json.dumps(data), headers=HEADERS, params=params
-    )
+    response = requests.post(f"{BASE_URL}/register", data=json.dumps(data), headers=HEADERS, params=params)
     assert response.ok
 
     # verify that latest was updated
@@ -122,9 +118,7 @@ def test_register_c():
     pwd = "c"
     data = {"username": username, "email": email, "pwd": pwd}
     params = {"latest": 6}
-    response = requests.post(
-        f"{BASE_URL}/register", data=json.dumps(data), headers=HEADERS, params=params
-    )
+    response = requests.post(f"{BASE_URL}/register", data=json.dumps(data), headers=HEADERS, params=params)
     assert response.ok
 
     # verify that latest was updated

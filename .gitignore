@@ -5,3 +5,4 @@ mergefile.py
 merge.txt
 .env
 .vagrant/
+.claude

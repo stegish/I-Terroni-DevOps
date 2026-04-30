@@ -1,24 +1,25 @@
+import logging
 import time
 from datetime import datetime
-from pyramid.view import view_config
-from models import LatestCommand, User, Message, Follower
-from pyramid.response import Response
+
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pyramid.httpexceptions import HTTPForbidden
+from pyramid.response import Response
+from pyramid.view import view_config
 from werkzeug.security import generate_password_hash
-from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
 from db import get_user_id
 from metrics import (
-    c_update_latest,
-    c_register,
     c_add_message,
-    g_total_users,
-    g_total_messages,
-    g_total_follows,
+    c_register,
+    c_update_latest,
     g_avg_followers,
+    g_total_follows,
+    g_total_messages,
+    g_total_users,
 )
+from models import Follower, LatestCommand, Message, User
 
-import logging
 logger = logging.getLogger(__name__)
 
 
@@ -101,22 +102,14 @@ def api_register(request):
         error = "The username is already taken"
 
     if error:
-        logger.info(
-            "Register failed", 
-            extra={"route": "register", "username": username, "reason": error}
-        )
+        logger.info("Register failed", extra={"route": "register", "username": username, "reason": error})
         return Response(json={"status": 400, "error_msg": error}, status=400)
 
-    new_user = User(
-        username=username, email=email, pw_hash=generate_password_hash(password)
-    )
+    new_user = User(username=username, email=email, pw_hash=generate_password_hash(password))
     request.db.add(new_user)
     request.db.commit()
 
-    logger.info(
-        "User registered successfully", 
-        extra={"route": "register", "username": username}
-    )
+    logger.info("User registered successfully", extra={"route": "register", "username": username})
     return Response(status=204)
 
 
@@ -145,18 +138,20 @@ def api_msgs(request):
         }
         for msg, usr in messages_query
     ]
-    
+
     logger.info("Recent messages fetched", extra={"route": "api_msgs", "count": len(results)})
     return results
-
 
 
 @view_config(route_name="api_user_msgs", request_method="GET", renderer="json")
 def api_user_msgs_get(request):
     """get messages for a specific user"""
     username = request.matchdict["username"]
-    logger.info("Fetching user messages", extra={"route": "api_user_msgs", "username": username, "no": request.GET.get("no", 100)})
-    
+    logger.info(
+        "Fetching user messages",
+        extra={"route": "api_user_msgs", "username": username, "no": request.GET.get("no", 100)},
+    )
+
     c_add_message.inc()
     update_latest(request)
     require_simulator_auth(request)
@@ -184,7 +179,7 @@ def api_user_msgs_get(request):
         }
         for msg, usr in messages_query
     ]
-    
+
     logger.info("User messages fetched", extra={"route": "api_user_msgs", "username": username, "count": len(results)})
     return results
 
@@ -194,7 +189,7 @@ def api_user_msgs_post(request):
     """post a new message as a specific user"""
     username = request.matchdict["username"]
     logger.info("Posting message", extra={"route": "api_user_msgs_post", "username": username})
-    
+
     update_latest(request)
     require_simulator_auth(request)
 
@@ -211,17 +206,17 @@ def api_user_msgs_post(request):
 
     content = data.get("content")
     if content:
-        new_msg = Message(
-            author_id=user_id, text=content, pub_date=int(time.time()), flagged=0
-        )
+        new_msg = Message(author_id=user_id, text=content, pub_date=int(time.time()), flagged=0)
         request.db.add(new_msg)
         request.db.commit()
-        logger.info("Message posted", extra={"route": "api_user_msgs_post", "username": username, "content_length": len(content)})
+        logger.info(
+            "Message posted",
+            extra={"route": "api_user_msgs_post", "username": username, "content_length": len(content)},
+        )
     else:
         logger.info("Empty content ignored", extra={"route": "api_user_msgs_post", "username": username})
 
     return Response(status=204)
-
 
 
 @view_config(route_name="api_metrics", request_method="GET", renderer="json")
@@ -241,7 +236,7 @@ def api_follows_get(request):
     username = request.matchdict["username"]
     no = int(request.GET.get("no", 100))
     logger.info("Fetching follows", extra={"route": "api_follows_get", "username": username, "no": no})
-    
+
     update_latest(request)
     require_simulator_auth(request)
 
@@ -257,10 +252,10 @@ def api_follows_get(request):
         .limit(no)
         .all()
     )
-    
+
     follows_list = [row[0] for row in followers]
     logger.info("Follows fetched", extra={"route": "api_follows_get", "username": username, "count": len(follows_list)})
-    
+
     return {"follows": follows_list}
 
 
@@ -269,7 +264,7 @@ def api_follows_post(request):
     """follow or unfollow a user"""
     username = request.matchdict["username"]
     logger.info("Follow action", extra={"route": "api_follows_post", "username": username})
-    
+
     update_latest(request)
     require_simulator_auth(request)
 
@@ -290,44 +285,53 @@ def api_follows_post(request):
         whom_username = data["follow"]
         whom_id = get_user_id(request, whom_username)
         if whom_id is None:
-            logger.warning("Target user not found", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
+            logger.warning(
+                "Target user not found",
+                extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username},
+            )
             return Response(json={"status": 404, "error_msg": "User not found"}, status=404)
 
-        check = (
-            request.db.query(Follower)
-            .filter(Follower.who_id == user_id, Follower.whom_id == whom_id)
-            .first()
-        )
+        check = request.db.query(Follower).filter(Follower.who_id == user_id, Follower.whom_id == whom_id).first()
         if not check:
             new_follower = Follower(who_id=user_id, whom_id=whom_id)
             request.db.add(new_follower)
             request.db.commit()
-            logger.info("Follow created", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
+            logger.info(
+                "Follow created",
+                extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username},
+            )
         else:
-            logger.info("Follow already exists", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
+            logger.info(
+                "Follow already exists",
+                extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username},
+            )
 
     elif "unfollow" in data:
         action = "unfollow"
         whom_username = data["unfollow"]
         whom_id = get_user_id(request, whom_username)
         if whom_id is None:
-            logger.info("Target not found for unfollow (ignored)", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
+            logger.info(
+                "Target not found for unfollow (ignored)",
+                extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username},
+            )
             return Response(status=204)
 
-        follower = (
-            request.db.query(Follower)
-            .filter(Follower.who_id == user_id, Follower.whom_id == whom_id)
-            .first()
-        )
+        follower = request.db.query(Follower).filter(Follower.who_id == user_id, Follower.whom_id == whom_id).first()
         if follower:
             request.db.delete(follower)
             request.db.commit()
-            logger.info("Follow removed", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
+            logger.info(
+                "Follow removed",
+                extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username},
+            )
         else:
-            logger.info("No follow to remove", extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username})
+            logger.info(
+                "No follow to remove",
+                extra={"route": "api_follows_post", "username": username, "action": action, "target": whom_username},
+            )
 
     return Response(status=204)
-
 
 
 @view_config(route_name="prometheus_metrics", request_method="GET")
