@@ -11,6 +11,11 @@ exclude_paths:
   - 'logging/**'
   - '*.pdf'
   - '*.svg'
+  # Workflow YAML pins third-party actions by 40-char commit SHA (security
+  # best practice). Codacy's secret scanner false-positives those SHAs as
+  # API keys. None of our enabled engines (ruff/pylint/bandit/hadolint/
+  # shellcheck) apply to workflow YAML anyway.
+  - '.github/workflows/**'
 
 engines:
   ruff:

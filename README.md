@@ -244,4 +244,19 @@ Project configuration:
 
 We react on the issues these tools surface: prominent items (security smells, duplicated blocks, high-complexity functions) are addressed; new code must not regress the metrics. New issues introduced in a PR will appear directly in the SonarCloud / Codacy PR check.
 
+#### Pinning third-party GitHub Actions by commit SHA
+
+Codacy flagged that several third-party actions in `.github/workflows/` were referenced by mutable refs (`@master`, `@v4`). We pinned every third-party action to a full commit SHA, with a trailing comment recording the human-readable version:
+
+```yaml
+uses: SonarSource/sonarcloud-github-action@ffc3010689be73b8e5ae0c57ce35968afd7909e8 # v5.0.0
+uses: codacy/codacy-analysis-cli-action@562ee3e92b8e92df8b67e0a5ff8aa8e261919c08 # v4.4.7
+```
+
+**Why this matters.** A tag (`@v4`) or branch (`@master`) is mutable — the maintainer (or an attacker who compromises their account) can repoint it to a different commit at any time. Because GitHub Actions execute with the workflow's secrets in scope (`SONAR_TOKEN`, `CODACY_PROJECT_TOKEN`, `DOCKER_PASSWORD`, `SSH_KEY`, `DATABASE_URL`), a malicious action could exfiltrate them on the next CI run. A commit SHA is immutable, so the workflow always runs the exact bytes that were reviewed when the pin was added. This is the same hardening guideline GitHub publishes in its [security hardening for GitHub Actions](https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-third-party-actions) documentation.
+
+First-party actions from official orgs (`actions/`, `docker/`, `github/`, `hadolint/`) are kept on version tags for readability, since their compromise model is different (they're maintained by GitHub or vendor security teams, not individual contributors).
+
+**Side effect — Codacy false positive.** A pinned commit SHA is a 40-character hex string, which Codacy's secret scanner pattern-matches as an API key (e.g. *"SonarQube Docs API Key detected"*). To suppress these false positives we excluded `.github/workflows/**` from Codacy in `.codacy.yml`. This is a safe trade-off: none of our enabled Codacy engines (`ruff`, `pylint`, `bandit`, `hadolint`, `shellcheck`) actually inspect workflow YAML, so the only thing we lose is the secret scanner — which was producing nothing but false positives on our SHA pins anyway. Real secret-leak prevention for workflows is enforced separately by GitHub's own push protection and by the principle of never committing secret values (we only reference them via `${{ secrets.* }}`).
+
 > **AI Disclosure:** Portions of this codebase were generated or optimized using LLMs. All AI-generated logic has been reviewed and tested for accuracy and security.
