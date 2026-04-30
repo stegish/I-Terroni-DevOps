@@ -1,27 +1,26 @@
-import time
+import logging
 import os
-from hashlib import md5
+import sys
+import time
 from datetime import datetime
-
-from pyramid.config import Configurator
-from pyramid.view import view_config
-from models import User, Message, Follower
-from db import get_db_session, get_user_id
-from pyramid.httpexceptions import HTTPFound, HTTPNotFound, HTTPForbidden
-from pyramid.session import SignedCookieSessionFactory
-from pyramid.events import NewRequest, subscriber, BeforeRender
+from hashlib import md5
 from wsgiref.simple_server import make_server
+
+import json_log_formatter
+from pyramid.config import Configurator
+from pyramid.events import BeforeRender, NewRequest, subscriber
+from pyramid.httpexceptions import HTTPForbidden, HTTPFound, HTTPNotFound
+from pyramid.session import SignedCookieSessionFactory
+from pyramid.view import view_config
 from werkzeug.security import check_password_hash, generate_password_hash
 
-import logging
-import sys
-import json_log_formatter
-
+from db import get_db_session, get_user_id
 from metrics import (
-    http_requests_total,
-    http_request_duration_seconds,
     http_errors_total,
+    http_request_duration_seconds,
+    http_requests_total,
 )
+from models import Follower, Message, User
 
 # Configuration
 PER_PAGE = 30
@@ -81,11 +80,7 @@ def init_request(event):
 
     request.user = None
     if "user_id" in request.session:
-        user_obj = (
-            request.db.query(User)
-            .filter(User.user_id == request.session["user_id"])
-            .first()
-        )
+        user_obj = request.db.query(User).filter(User.user_id == request.session["user_id"]).first()
         if user_obj:
             request.user = {
                 "user_id": user_obj.user_id,
@@ -113,7 +108,7 @@ def add_global_renderer_globals(event):
     event["url_for"] = url_for
 
     flashes = request.session.pop_flash()
-    event['get_flashed_messages'] = lambda: flashes
+    event["get_flashed_messages"] = lambda: flashes
 
 
 @view_config(route_name="timeline", renderer="templates/timeline_refactor.html")
@@ -123,9 +118,7 @@ def timeline(request):
         return HTTPFound(location=request.route_url("public_timeline"))
 
     followed_subquery = (
-        request.db.query(Follower.whom_id)
-        .filter(Follower.who_id == request.session["user_id"])
-        .subquery()
+        request.db.query(Follower.whom_id).filter(Follower.who_id == request.session["user_id"]).subquery()
     )
 
     messages_query = (
@@ -133,8 +126,7 @@ def timeline(request):
         .join(User, Message.author_id == User.user_id)
         .filter(
             Message.flagged == 0,
-            (User.user_id == request.session["user_id"])
-            | (User.user_id.in_(followed_subquery)),
+            (User.user_id == request.session["user_id"]) | (User.user_id.in_(followed_subquery)),
         )
         .order_by(Message.pub_date.desc())
         .limit(PER_PAGE)
@@ -267,9 +259,7 @@ def unfollow_user(request):
 
     follower = (
         request.db.query(Follower)
-        .filter(
-            Follower.who_id == request.session["user_id"], Follower.whom_id == whom_id
-        )
+        .filter(Follower.who_id == request.session["user_id"], Follower.whom_id == whom_id)
         .first()
     )
     if follower:
@@ -348,9 +338,7 @@ def register(request):
         elif get_user_id(request, username) is not None:
             error = "The username is already taken"
         else:
-            new_user = User(
-                username=username, email=email, pw_hash=generate_password_hash(password)
-            )
+            new_user = User(username=username, email=email, pw_hash=generate_password_hash(password))
             request.db.add(new_user)
             request.db.commit()
             request.session.flash("You were successfully registered and can login now")
@@ -366,6 +354,7 @@ def logout(request):
     request.session.flash("You were logged out")
     return HTTPFound(location=request.route_url("public_timeline"))
 
+
 def setup_logging():
     formatter = json_log_formatter.JSONFormatter()
 
@@ -375,6 +364,7 @@ def setup_logging():
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     logger.handlers = [json_handler]
+
 
 with Configurator() as config:
     config.include("pyramid_jinja2")

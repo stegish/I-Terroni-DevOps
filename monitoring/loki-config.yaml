@@ -1,0 +1,68 @@
+# Loki single-binary config with 7-day retention.
+# Keeps disk usage bounded on the manager node.
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+
+common:
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    instance_addr: 127.0.0.1
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: boltdb-shipper
+      object_store: filesystem
+      schema: v11
+      index:
+        prefix: index_
+        period: 24h
+
+ingester:
+  chunk_idle_period: 1h          # flush idle chunks after 1h
+  chunk_target_size: 1048576     # 1MB target chunk size (small, for low-volume)
+  max_chunk_age: 1h
+  chunk_retain_period: 30s
+
+limits_config:
+  retention_period: 168h         # 7 days
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+  ingestion_rate_mb: 4
+  ingestion_burst_size_mb: 6
+  per_stream_rate_limit: 3MB
+  per_stream_rate_limit_burst: 15MB
+
+# Compactor handles deletion of expired chunks (driven by retention_period above).
+compactor:
+  working_directory: /loki/compactor
+  compaction_interval: 10m
+  retention_enabled: true
+  retention_delete_delay: 2h
+  retention_delete_worker_count: 50
+  delete_request_store: filesystem
+
+ruler:
+  storage:
+    type: local
+    local:
+      directory: /loki/rules
+  rule_path: /loki/rules-temp
+  alertmanager_url: ""
+  ring:
+    kvstore:
+      store: inmemory
+  enable_api: true
+
+analytics:
+  reporting_enabled: false

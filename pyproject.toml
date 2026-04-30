@@ -1,0 +1,46 @@
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = [
+    ".vagrant",
+    ".git",
+    "__pycache__",
+    "out",
+    "static",
+    "templates",
+    "simulator",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "W",   # pycodestyle warnings
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "E402",  # module level import not at top of file
+    "B008",  # function calls in argument defaults
+    "UP031", # percent-format (kept; tests rely on rendered HTML-escaped output)
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.codespell]
+skip = "*.csv,*.svg,*.png,*.jpg,*.gif,*.pdf,*.ipynb,.git,.vagrant,out,static,templates,*.lock,*.json"
+ignore-words-list = "fo,nd,bu,wee,iam,te,ba,doubleclick,blub"
+quiet-level = 2
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+exclude = [
+    "simulator/",
+    "out/",
+    "templates/",
+]

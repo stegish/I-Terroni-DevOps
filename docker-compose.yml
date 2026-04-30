@@ -16,7 +16,15 @@ services:
       - minitwit_net
     deploy:
       replicas: 3
+      placement:
+        # Keep app off the manager: the manager is reserved for the observability stack.
+        constraints:
+          - node.role == worker
+        # With 2 workers + 3 replicas this forces a 2/1 spread instead of 3/0.
+        max_replicas_per_node: 2
       resources:
+        limits:
+          memory: 256M
         reservations:
           memory: 128M
       update_config:
@@ -31,14 +39,29 @@ services:
       - minitwit_net
     deploy:
       replicas: 1
+      placement:
+        constraints:
+          - node.role == worker
       resources:
+        limits:
+          memory: 100M
         reservations:
           memory: 50M
 
   prometheus:
     image: prom/prometheus:latest
+    # Cap retention so the TSDB never blows the manager disk.
+    # 7 days of history OR 512MB on disk, whichever comes first.
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=7d'
+      - '--storage.tsdb.retention.size=512MB'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
     ports:
       - "9090:9090"
     networks:
@@ -49,6 +72,8 @@ services:
         constraints:
           - node.role == manager
       resources:
+        limits:
+          memory: 400M
         reservations:
           memory: 256M
 
@@ -59,6 +84,7 @@ services:
     volumes:
       - ./monitoring/grafana/provisioning/:/etc/grafana/provisioning/
       - ./monitoring/grafana/dashboards/:/var/lib/grafana/dashboards/
+      - grafana_data:/var/lib/grafana
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     networks:
@@ -69,6 +95,8 @@ services:
         constraints:
           - node.role == manager
       resources:
+        limits:
+          memory: 200M
         reservations:
           memory: 128M
 
@@ -81,14 +109,19 @@ services:
     deploy:
       mode: global
       resources:
+        limits:
+          memory: 64M
         reservations:
           memory: 32M
 
   loki:
     image: grafana/loki:2.9.4
+    command: -config.file=/etc/loki/loki-config.yaml
+    volumes:
+      - ./monitoring/loki-config.yaml:/etc/loki/loki-config.yaml
+      - loki_data:/loki
     ports:
       - "3100:3100"
-    command: -config.file=/etc/loki/local-config.yaml
     networks:
       - minitwit_net
     deploy:
@@ -97,6 +130,8 @@ services:
         constraints:
           - node.role == manager
       resources:
+        limits:
+          memory: 350M
         reservations:
           memory: 256M
 
@@ -114,6 +149,8 @@ services:
     deploy:
       mode: global
       resources:
+        limits:
+          memory: 64M
         reservations:
           memory: 32M
 
@@ -123,4 +160,6 @@ configs:
     external: true
 
 volumes:
-  esdata:
+  prometheus_data:
+  grafana_data:
+  loki_data:

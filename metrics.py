@@ -1,4 +1,4 @@
-from prometheus_client import Counter, Histogram, Gauge
+from prometheus_client import Counter, Gauge, Histogram
 
 c_update_latest = Counter("minitwit_fct_update_latest_total", "Calls to update_latest")
 c_register = Counter("minitwit_fct_register_total", "Calls to register")

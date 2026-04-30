@@ -124,37 +124,139 @@ SQLAlchemy abstracts the difference between the two engines, so the same ORM mod
 
 During the migration to MySQL, the existing SQLite data was not transferred to the new database. As a result, the production database restarted empty and will be filled with the new data of the simulator (16.03.2026).
 
-### 8. Monitoring (Prometheus + Grafana)
+### 8. Monitoring, Logging & Cluster Topology
 
-We collect and visualize metrics using **Prometheus** and **Grafana**, split into two dedicated dashboards:
+We collect and visualize metrics with **Prometheus + Grafana** and logs with **Loki + Promtail**.
 
-* **Hardware dashboard**: infrastructure-level metrics collected via `node-exporter` (CPU usage, memory, disk I/O, and network traffic) on the DigitalOcean Droplet.
-* **Software dashboard**: application-level metrics instrumented directly in the MiniTwit codebase via `prometheus-client` — (request counts, response times, and endpoint-level activity).
+* **Hardware dashboard**: infrastructure-level metrics from `node-exporter` (CPU, memory, disk I/O, network traffic) on every Droplet.
+* **Software dashboard**: application-level metrics instrumented in MiniTwit via `prometheus-client` (request counts, response times, endpoint activity).
+* **Logs**: Promtail tails Docker container logs on each node and ships them to Loki, queryable from Grafana.
 
-Both dashboards are provisioned automatically via the `monitoring/` directory mounted into the Grafana container, so they are available immediately after `docker compose up`.
+Both dashboards are provisioned automatically via the `monitoring/` directory mounted into the Grafana container, so they are available immediately after `docker stack deploy`.
 
-### 9. Testing & Static Analysis
+#### Swarm topology (1 manager + 2 workers)
+
+The cluster is intentionally split so the manager is reserved for the observability stack and never competes with the application for RAM/CPU:
+
+| Service | Where it runs | Why |
+| --- | --- | --- |
+| `prometheus`, `grafana`, `loki` | **manager only** (`node.role == manager`) | Stateful — named volumes are bound to the manager so data survives redeploys. |
+| `minitwit` (3 replicas), `flagtool` | **workers only** (`node.role == worker`) | Stateless app workload, kept off the manager. `max_replicas_per_node: 2` forces a 2/1 spread across the two workers instead of all 3 landing on the same node. |
+| `node-exporter`, `promtail` | **every node** (`mode: global`) | One agent per node so per-host metrics and logs are collected. |
+
+Prometheus uses Swarm's built-in DNS service discovery (`tasks.minitwit`, `tasks.node-exporter`) to scrape **every** replica, not a single round-robin one.
+
+#### Persistence & retention
+
+| Stateful service | Volume | Retention |
+| --- | --- | --- |
+| Prometheus | `prometheus_data` → `/prometheus` | 7 days **OR** 512 MB on disk (whichever first) |
+| Loki | `loki_data` → `/loki` | 7 days, enforced by the compactor (see `monitoring/loki-config.yaml`) |
+| Grafana | `grafana_data` → `/var/lib/grafana` | unbounded (small DB: users, alerts, edited dashboards) |
+
+These caps keep the manager droplet safe (~1 GB used out of 25 GB at steady state).
+
+#### Resource limits
+
+Every service declares both `reservations` (minimum guaranteed) and `limits` (hard cap). Limits prevent a runaway container from killing the whole droplet via OOM.
+
+### 9. Schema Initialization (one-shot, decoupled from app boot)
+
+**Where it runs:** as a dedicated step in `deploy.sh`, before `docker stack deploy`. The same step is mirrored in the CI `test` job.
+
+**What it does:** runs `Base.metadata.create_all(bind=engine)` exactly once against MySQL via a throwaway container:
+```bash
+docker run --rm --env-file .env michaelfant/minitwitimage:latest \
+  python -c "from db import init_db; init_db()"
+```
+
+**Why it is no longer done on app boot.** Originally `db.py` called `init_db()` at module import time, so DDL ran every time the application started. With the move to Docker Swarm (3 `minitwit` replicas across 2 worker nodes, plus 3 gunicorn workers per replica) this race condition surfaced in production:
+
+```
+pymysql.err.OperationalError: (1684, "Table 'minitwit'.'latest_command'
+was skipped since its definition is being modified by concurrent DDL statement")
+```
+
+MySQL error **1684** is raised when two sessions try to alter or create the same table at the same time. With up to 9 processes (3 replicas × 3 workers) all calling `create_all()` in parallel during a `start-first` rolling deploy, the losers of the race crashed and Swarm flapped the service.
+
+**Rule going forward — best practice:** the application image must never run schema migrations on startup. DDL is a deploy-time concern, not a runtime concern, and must be performed by exactly one process. App containers assume the schema already exists.
+
+This pattern also matches how real migration tools (Alembic, Flyway, Liquibase) are run: as a separate, single-shot step in the pipeline, never embedded in the request-serving process.
+
+### 10. Testing & Static Analysis
 
 We integrated three levels of automated testing into the CI pipeline as a quality gate, so if any test fails, deployment is blocked:
 
-* **Integration tests** ("minitwit_tests_refactor.py") : tests core app functionality (register, login, messages, follow/unfollow) via HTTP requests
-* **API tests** ("minitwit_sim_api_test.py") : tests the simulator REST endpoints (`/register`, `/msgs`, `/fllws`, `/latest`)
-* **UI & End-to-End tests** ("test_itu_minitwit_ui.py") : uses Selenium with a remote Chrome container to interact with the browser UI and verify user registration both visually (flash message) and functionally (login)
+* **Integration tests** (`minitwit_tests_refactor.py`) : tests core app functionality (register, login, messages, follow/unfollow) via HTTP requests
+* **API tests** (`minitwit_sim_api_test.py`) : tests the simulator REST endpoints (`/register`, `/msgs`, `/fllws`, `/latest`)
+* **UI & End-to-End tests** (`test_itu_minitwit_ui.py`) : uses Selenium with a remote Chrome container to interact with the browser UI and verify user registration both visually (flash message) and functionally (login)
+
+The pipeline is structured as three sequential jobs in `.github/workflows/continuous-deployment.yml`:
+
+1. **`static-analysis`** — runs all linters/formatters (see below)
+2. **`test`** — needs `static-analysis`; spins up MySQL + the app + Selenium and runs the full test suite
+3. **`build-and-deploy`** — needs `test`; only here are images pushed to Docker Hub and deployed to the Droplet
+
+This ordering guarantees that **broken images never reach Docker Hub** and that **deployment never happens on a failing test suite**.
 
 #### Static Analysis
 
-We added three static analysis tools as quality gates, running before build and deploy:
+We added five static analysis tools as quality gates, running before build and deploy:
 
-* **`ruff`** : Python linter, catches errors and bad practices
+* **`ruff`** : Python linter and formatter, catches errors, bad practices, unsorted imports
+* **`codespell`** : misspelling checker for source code and comments
+* **`mypy`** : Python static type checker (non-blocking — reports type issues without failing the build)
 * **`hadolint`** : Dockerfile linter, checks best practices for all three Dockerfiles
 * **`shellcheck`** : shell script linter, checks `control.sh` and `deploy.sh`
 
-**`hadolint`** and **`shellcheck`** run exclusively in CI since Dockerfiles and shell scripts change rarely and these tools are not straightforward to install on Windows.
+`hadolint` and `shellcheck` run exclusively in CI since Dockerfiles and shell scripts change rarely and these tools are not straightforward to install on Windows.
 
-**`ruff`** is also available locally for a faster feedback loop. Rather than pushing to discover linting errors, we can run:
+`ruff`, `codespell`, and `mypy` are also available locally via the `Makefile` for a faster feedback loop:
+
 ```bash
-ruff check .
+make install-dev   # one-time: install dev tooling
+make lint          # ruff check + ruff format --check + codespell
+make lint-fix      # auto-fix ruff issues + reformat
+make typecheck     # mypy
+make check         # full local CI mirror (lint)
 ```
-and see if there are specific errors in the code.
+
+Tool configuration lives in `pyproject.toml`.
+
+### 11. Maintainability & Technical Debt (SonarCloud + Codacy)
+
+We continuously measure maintainability and technical debt with two third-party services that scan every push and pull request:
+
+* **[SonarCloud](https://sonarcloud.io)** — provides a Maintainability rating, Reliability rating, Security rating, code smells, bugs, vulnerabilities, duplications, cyclomatic complexity, and the SQALE technical-debt index (in minutes/days).
+* **[Codacy](https://www.codacy.com)** — provides an aggregated quality grade based on multiple engines (`ruff`, `pylint`, `bandit`, `hadolint`, `shellcheck`).
+
+Both run in `.github/workflows/code-quality.yml` and require the following GitHub Actions secrets:
+
+| Secret | Where to obtain |
+| --- | --- |
+| `SONAR_TOKEN` | https://sonarcloud.io → Account → Security → Generate Token |
+| `CODACY_PROJECT_TOKEN` | https://app.codacy.com → Project → Settings → Integrations → Project API |
+
+Project configuration:
+
+* **`sonar-project.properties`** — declares Sonar project key, sources, test paths, and exclusions
+* **`.codacy.yml`** — declares Codacy excluded paths and enabled engines
+
+We react on the issues these tools surface: prominent items (security smells, duplicated blocks, high-complexity functions) are addressed; new code must not regress the metrics. New issues introduced in a PR will appear directly in the SonarCloud / Codacy PR check.
+
+#### Pinning third-party GitHub Actions by commit SHA
+
+Codacy flagged that several third-party actions in `.github/workflows/` were referenced by mutable refs (`@master`, `@v4`). We pinned every third-party action to a full commit SHA, with a trailing comment recording the human-readable version:
+
+```yaml
+uses: SonarSource/sonarcloud-github-action@ffc3010689be73b8e5ae0c57ce35968afd7909e8 # v5.0.0
+uses: codacy/codacy-analysis-cli-action@562ee3e92b8e92df8b67e0a5ff8aa8e261919c08 # v4.4.7
+```
+
+**Why this matters.** A tag (`@v4`) or branch (`@master`) is mutable — the maintainer (or an attacker who compromises their account) can repoint it to a different commit at any time. Because GitHub Actions execute with the workflow's secrets in scope (`SONAR_TOKEN`, `CODACY_PROJECT_TOKEN`, `DOCKER_PASSWORD`, `SSH_KEY`, `DATABASE_URL`), a malicious action could exfiltrate them on the next CI run. A commit SHA is immutable, so the workflow always runs the exact bytes that were reviewed when the pin was added. This is the same hardening guideline GitHub publishes in its [security hardening for GitHub Actions](https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-third-party-actions) documentation.
+
+First-party actions from official orgs (`actions/`, `docker/`, `github/`, `hadolint/`) are kept on version tags for readability, since their compromise model is different (they're maintained by GitHub or vendor security teams, not individual contributors).
+
+**Side effect — Codacy false positive.** A pinned commit SHA is a 40-character hex string, which Codacy's secret scanner pattern-matches as an API key (e.g. *"SonarQube Docs API Key detected"*). To suppress these false positives we excluded `.github/workflows/**` from Codacy in `.codacy.yml`. This is a safe trade-off: none of our enabled Codacy engines (`ruff`, `pylint`, `bandit`, `hadolint`, `shellcheck`) actually inspect workflow YAML, so the only thing we lose is the secret scanner — which was producing nothing but false positives on our SHA pins anyway. Real secret-leak prevention for workflows is enforced separately by GitHub's own push protection and by the principle of never committing secret values (we only reference them via `${{ secrets.* }}`).
 
 > **AI Disclosure:** Portions of this codebase were generated or optimized using LLMs. All AI-generated logic has been reviewed and tested for accuracy and security.

@@ -16,8 +16,7 @@ if [ "$1" = "init" ]; then
         exit 1
     fi
     echo "Initializing database..."
-    # Imports init_db from the new refactored file
-    $PYTHON_CMD -c "from $APP_MODULE import init_db; init_db()"
+    $PYTHON_CMD -c "from db import init_db; init_db()"
 
 elif [ "$1" = "startprod" ]; then
      echo "Starting minitwit with production webserver..."
