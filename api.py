@@ -5,17 +5,21 @@ from models import LatestCommand, User, Message, Follower
 from pyramid.response import Response
 from pyramid.httpexceptions import HTTPForbidden
 from werkzeug.security import generate_password_hash
-from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
 from db import get_user_id
+from metrics import (
+    c_update_latest,
+    c_register,
+    c_add_message,
+    g_total_users,
+    g_total_messages,
+    g_total_follows,
+    g_avg_followers,
+)
 
 import logging
 logger = logging.getLogger(__name__)
-
-# Define Prometheus counters
-c_update_latest = Counter("minitwit_fct_update_latest_total", "Calls to update_latest")
-c_register = Counter("minitwit_fct_register_total", "Calls to register")
-c_add_message = Counter("minitwit_fct_add_message_total", "Calls to add_message")
 
 
 def require_simulator_auth(request):
@@ -329,4 +333,15 @@ def api_follows_post(request):
 @view_config(route_name="prometheus_metrics", request_method="GET")
 def metrics(request):
     """exposes prometheus metrics"""
+    try:
+        total_users = request.db.query(User).count()
+        total_messages = request.db.query(Message).count()
+        total_follows = request.db.query(Follower).count()
+        g_total_users.set(total_users)
+        g_total_messages.set(total_messages)
+        g_total_follows.set(total_follows)
+        g_avg_followers.set((total_follows / total_users) if total_users > 0 else 0)
+    except Exception:
+        logger.exception("Failed to refresh business gauges")
+
     return Response(generate_latest(), content_type=CONTENT_TYPE_LATEST)

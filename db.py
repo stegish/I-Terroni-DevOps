@@ -1,7 +1,10 @@
-from sqlalchemy import create_engine
+import os
+import time
+
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
-import os
+from metrics import db_query_duration_seconds
 
 DATABASE_URI = os.environ.get("DATABASE_URL", "")
 engine = create_engine(
@@ -12,6 +15,18 @@ engine = create_engine(
     pool_recycle=3600
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+@event.listens_for(engine, "before_cursor_execute")
+def _db_before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    context._query_start_time = time.perf_counter()
+
+
+@event.listens_for(engine, "after_cursor_execute")
+def _db_after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    start = getattr(context, "_query_start_time", None)
+    if start is not None:
+        db_query_duration_seconds.observe(time.perf_counter() - start)
 
 
 def get_db_session():

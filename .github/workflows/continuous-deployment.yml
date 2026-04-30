@@ -76,16 +76,42 @@ jobs:
           tags: ${{ secrets.DOCKER_USERNAME }}/flagtoolimage:latest
 
       - name: Test minitwit
+        env:
+          MYSQL_ROOT_PASSWORD: testpass
+          MYSQL_DATABASE: minitwit
         run: |
           docker build -t ${{ secrets.DOCKER_USERNAME }}/minitwittestimage -f Dockerfile-minitwit-tests .
-          docker run -d --name minitwit \
+
+          docker network create test-net
+
+          docker run -d --name mysql --network test-net \
+            -e MYSQL_ROOT_PASSWORD="$MYSQL_ROOT_PASSWORD" \
+            -e MYSQL_DATABASE="$MYSQL_DATABASE" \
+            mysql:8
+
+          echo "waiting for mysql..."
+          timeout 120s bash -c "until docker exec mysql mysql -h 127.0.0.1 -uroot -p$MYSQL_ROOT_PASSWORD -e 'SELECT 1' $MYSQL_DATABASE >/dev/null 2>&1; do echo waiting...; sleep 3; done" || {
+            echo "=== mysql container logs ==="
+            docker logs mysql
+            exit 1
+          }
+
+          DATABASE_URL="mysql+pymysql://root:${MYSQL_ROOT_PASSWORD}@mysql:3306/${MYSQL_DATABASE}"
+
+          docker run -d --name minitwit --network test-net \
             -p 8080:5000 \
-            -e DATABASE_URL=sqlite:///tmp/minitwit.db \
+            -e DATABASE_URL="$DATABASE_URL" \
             ${{ secrets.DOCKER_USERNAME }}/minitwitimage:latest
           docker run -d --name selenium --network=host selenium/standalone-chrome:latest
 
           echo "waiting on port 8080..."
-          timeout 60s bash -c 'until curl -s http://localhost:8080 > /dev/null; do echo "waiting..."; sleep 2; done'
+          timeout 60s bash -c 'until curl -s http://localhost:8080 > /dev/null; do echo "waiting..."; sleep 2; done' || {
+            echo "=== minitwit container status ==="
+            docker ps -a --filter name=minitwit
+            echo "=== minitwit container logs ==="
+            docker logs minitwit
+            exit 1
+          }
 
           echo "waiting for selenium..."
           timeout 30s bash -c 'until curl -s http://localhost:4444/wd/hub/status > /dev/null; do echo "waiting..."; sleep 2; done'
@@ -94,7 +120,6 @@ jobs:
             -e BASE_URL=http://localhost:8080 \
             -e GUI_URL=http://localhost:8080 \
             -e SELENIUM_HUB=http://localhost:4444/wd/hub \
-            -e DATABASE_URL=sqlite:///tmp/minitwit.db \
             ${{ secrets.DOCKER_USERNAME }}/minitwittestimage
 
       - name: Configure SSH
