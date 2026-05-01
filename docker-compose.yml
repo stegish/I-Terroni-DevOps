@@ -47,9 +47,14 @@ services:
           memory: 100M
         reservations:
           memory: 50M
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 120s
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.55.1
     # Cap retention so the TSDB never blows the manager disk.
     # 7 days of history OR 512MB on disk, whichever comes first.
     command:
@@ -73,12 +78,17 @@ services:
           - node.role == manager
       resources:
         limits:
-          memory: 400M
+          memory: 280M
         reservations:
-          memory: 256M
+          memory: 150M
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 120s
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.4.0
     ports:
       - "3000:3000"
     volumes:
@@ -87,6 +97,8 @@ services:
       - grafana_data:/var/lib/grafana
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
+      # WAL mode = durable writes even if the container is killed mid-transaction.
+      - GF_DATABASE_WAL=true
     networks:
       - minitwit_net
     deploy:
@@ -96,12 +108,56 @@ services:
           - node.role == manager
       resources:
         limits:
-          memory: 200M
+          memory: 280M
         reservations:
-          memory: 128M
+          memory: 150M
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 120s
+
+  # Daily hot-backup of Grafana's SQLite DB. Keeps 7 rotating snapshots inside
+  # grafana_backups so users/dashboards survive a corrupted grafana.db.
+  # Restore: stop grafana, copy a backup over /var/lib/grafana/grafana.db, restart.
+  grafana-backup:
+    image: alpine:3.20
+    volumes:
+      - grafana_data:/source
+      - grafana_backups:/backups
+    command:
+      - sh
+      - -c
+      - |
+        apk add --no-cache sqlite >/dev/null
+        while true; do
+          STAMP=$$(date +%Y-%m-%d)
+          sqlite3 /source/grafana.db ".backup /backups/grafana-$$STAMP.db" \
+            && echo "[$$(date -Iseconds)] backup ok: grafana-$$STAMP.db" \
+            || echo "[$$(date -Iseconds)] backup FAILED"
+          find /backups -name 'grafana-*.db' -mtime +7 -delete
+          sleep 86400
+        done
+    networks:
+      - minitwit_net
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          memory: 32M
+        reservations:
+          memory: 16M
+      restart_policy:
+        condition: on-failure
+        delay: 30s
+        max_attempts: 5
+        window: 300s
 
   node-exporter:
-    image: prom/node-exporter:latest
+    image: prom/node-exporter:v1.8.2
     ports:
       - "9100:9100"
     networks:
@@ -113,6 +169,11 @@ services:
           memory: 64M
         reservations:
           memory: 32M
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 120s
 
   loki:
     image: grafana/loki:2.9.4
@@ -131,9 +192,14 @@ services:
           - node.role == manager
       resources:
         limits:
-          memory: 350M
+          memory: 280M
         reservations:
-          memory: 256M
+          memory: 150M
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 120s
 
   promtail:
     image: grafana/promtail:2.9.4
@@ -150,9 +216,14 @@ services:
       mode: global
       resources:
         limits:
-          memory: 64M
+          memory: 80M
         reservations:
-          memory: 32M
+          memory: 40M
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 120s
 
 configs:
   promtail_config:
@@ -162,4 +233,5 @@ configs:
 volumes:
   prometheus_data:
   grafana_data:
+  grafana_backups:
   loki_data:

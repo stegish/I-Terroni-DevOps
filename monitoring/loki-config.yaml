@@ -7,6 +7,11 @@ server:
   grpc_listen_port: 9096
 
 common:
+  # Pin every ring/lifecycler to loopback so a container restart (which gets a
+  # new overlay IP) does not leave stale entries in the in-memory ring. Without
+  # this the new instance spends ~10 minutes timing out against the dead IP and
+  # log queries return empty during that window.
+  instance_addr: 127.0.0.1
   path_prefix: /loki
   storage:
     filesystem:
@@ -14,9 +19,20 @@ common:
       rules_directory: /loki/rules
   replication_factor: 1
   ring:
-    instance_addr: 127.0.0.1
     kvstore:
       store: inmemory
+
+# Single-binary single-replica deployment: skip the query-scheduler entirely
+# and use the in-process legacy queue. Removes the scheduler-ring discovery
+# step that was causing the post-restart blackout.
+frontend:
+  scheduler_address: ""
+
+frontend_worker:
+  scheduler_address: ""
+
+query_scheduler:
+  use_scheduler_ring: false
 
 schema_config:
   configs:
