@@ -1,6 +1,17 @@
 #!/bin/bash
 set -e
 
+# Export all variables from .env into the current shell so that sudo -E passes
+# them to docker stack deploy for docker-compose.yml variable substitution.
+# Without this, mandatory variables like GF_SECURITY_ADMIN_PASSWORD and
+# SECRET_KEY would be unset and the deploy would fail at the :? check.
+if [[ -f .env ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  source .env
+  set +a
+fi
+
 echo "1. Computing promtail config version..."
 HASH=$(sha256sum ./logging/promtail-config.yml | cut -c1-8)
 export PROMTAIL_CONFIG_NAME="promtail_config_${HASH}"
