@@ -25,13 +25,35 @@ Vagrant.configure("2") do |config|
     export DEBIAN_FRONTEND=noninteractive
     echo "Updating system..."
     apt-get update
-    
-    echo "Installing Docker and Docker Compose..."
-    apt-get install -y docker.io docker-compose-plugin git
-    
+
+    # Note: nginx itself runs INSIDE the docker swarm (see docker-compose.yml).
+    # We install only certbot here, on the host, so scripts/setup-tls.sh can
+    # run certbot in webroot mode against the running swarm nginx.
+    echo "Installing Docker, Docker Compose, certbot, ufw..."
+    apt-get install -y docker.io docker-compose-plugin git ufw certbot
+
     systemctl enable docker
     systemctl start docker
-    
+
+    echo "Configuring ufw firewall (deny by default, allow only 22/80/443)..."
+    ufw --force reset
+    ufw default deny incoming
+    ufw default allow outgoing
+    ufw allow 22/tcp comment 'SSH'
+    ufw allow 80/tcp comment 'HTTP (ACME challenge + redirect)'
+    ufw allow 443/tcp comment 'HTTPS'
+    ufw --force enable
+    ufw status verbose
+
+    # NOTE: Docker bypasses ufw by writing to iptables directly. The ufw rules
+    # above only protect the host's own listening sockets. Container ports are
+    # additionally restricted by binding them to 127.0.0.1 in docker-compose.yml.
+    # See SECURITY.md §2.A for the rationale.
+
+    echo "Enabling unattended-upgrades for OS security patches..."
+    apt-get install -y unattended-upgrades
+    dpkg-reconfigure -f noninteractive unattended-upgrades
+
     echo "Server provisioned successfully!"
   SHELL
 end

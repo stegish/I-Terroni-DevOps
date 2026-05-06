@@ -8,10 +8,16 @@ RUN apt-get clean && \
     libsqlite3-dev \
     && rm -rf /var/lib/apt/lists/*
 
+RUN groupadd --system --gid 10001 appuser \
+ && useradd  --system --uid 10001 --gid 10001 --create-home appuser
+
 WORKDIR /app
 
-COPY flag_tool.c .
+COPY --chown=appuser:appuser flag_tool.c .
 
-RUN gcc flag_tool.c -o flag_tool -lsqlite3
+RUN gcc flag_tool.c -o flag_tool -lsqlite3 \
+ && chown appuser:appuser flag_tool
+
+USER appuser
 
 CMD ["tail", "-f", "/dev/null"]
