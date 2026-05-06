@@ -25,9 +25,7 @@ from models import Follower, LatestCommand, Message, User
 # Compute the expected Authorization header once at startup.
 # The SIMULATOR_BASIC_AUTH env var holds the simulator's password.
 # Fail fast if it's missing so a misconfigured container is caught immediately.
-_SIMULATOR_AUTH = "Basic " + base64.b64encode(
-    f"simulator:{os.environ['SIMULATOR_BASIC_AUTH']}".encode()
-).decode()
+_SIMULATOR_AUTH = "Basic " + base64.b64encode(f"simulator:{os.environ['SIMULATOR_BASIC_AUTH']}".encode()).decode()
 
 logger = logging.getLogger(__name__)
 
