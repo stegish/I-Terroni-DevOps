@@ -84,6 +84,7 @@ jobs:
             --metrics=off \
             --timeout=300
 
+
   test:
     name: Test (Quality Gate)
     needs: static-analysis
