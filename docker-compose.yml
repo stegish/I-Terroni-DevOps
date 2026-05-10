@@ -1,17 +1,68 @@
 version: '3.8'
 
+# Port-publishing strategy (see SECURITY.md §2.A):
+#
+#   - Public services (nginx :80, :443) use ingress mode → reachable on the
+#     manager droplet's public IP.
+#   - Admin/observability services (Prometheus, Grafana, Loki) use long-form
+#     `mode: host` + `host_ip: 127.0.0.1` so they bind ONLY to the manager's
+#     loopback. Reach them via SSH tunnel:
+#         ssh -L 3000:127.0.0.1:3000 root@<droplet>
+#     This is necessary because Docker writes iptables rules directly and
+#     bypasses ufw — relying only on ufw to "block" 3000/9090/3100 does NOT
+#     work in Swarm mode (lecture: ElasticSearch ransom story).
+#   - minitwit, node-exporter, promtail have NO host port — they're reached
+#     via Swarm overlay DNS (tasks.<service>:<port>), which is what nginx and
+#     Prometheus already do.
+
 networks:
   minitwit_net:
     driver: overlay
     attachable: true
 
 services:
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - target: 80
+        published: 80
+        protocol: tcp
+        mode: ingress
+      - target: 443
+        published: 443
+        protocol: tcp
+        mode: ingress
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/www/certbot:/var/www/certbot:ro
+    networks:
+      - minitwit_net
+    deploy:
+      replicas: 1
+      # Bake the nginx config hash into a label. When nginx.conf content
+      # changes (e.g. setup-tls.sh has flipped it to HTTPS mode), the spec
+      # changes and Swarm rolls the nginx service. Without this, bind-mount
+      # content changes wouldn't trigger a restart.
+      labels:
+        - "config.version=${NGINX_CONFIG_VERSION:-default}"
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          memory: 64M
+        reservations:
+          memory: 32M
+      restart_policy:
+        condition: any
+
   minitwit:
     image: michaelfant/minitwitimage:latest
     env_file:
       - .env
-    ports:
-      - "8080:5000"
+    # No host port — nginx reaches us over the overlay network
+    # via Swarm DNS (`tasks.minitwit:5000`).
     networks:
       - minitwit_net
     deploy:
@@ -47,9 +98,14 @@ services:
           memory: 100M
         reservations:
           memory: 50M
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 120s
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.55.1
     # Cap retention so the TSDB never blows the manager disk.
     # 7 days of history OR 512MB on disk, whichever comes first.
     command:
@@ -63,7 +119,11 @@ services:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
     ports:
-      - "9090:9090"
+      - target: 9090
+        published: 9090
+        protocol: tcp
+        mode: host
+        host_ip: 127.0.0.1
     networks:
       - minitwit_net
     deploy:
@@ -73,20 +133,33 @@ services:
           - node.role == manager
       resources:
         limits:
-          memory: 400M
+          memory: 280M
         reservations:
-          memory: 256M
+          memory: 150M
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 120s
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.4.0
     ports:
-      - "3000:3000"
+      - target: 3000
+        published: 3000
+        protocol: tcp
+        mode: host
+        host_ip: 127.0.0.1
     volumes:
       - ./monitoring/grafana/provisioning/:/etc/grafana/provisioning/
       - ./monitoring/grafana/dashboards/:/var/lib/grafana/dashboards/
       - grafana_data:/var/lib/grafana
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      # Pull the admin password from the host environment instead of hard-coding it.
+      # Production must set GF_SECURITY_ADMIN_PASSWORD in .env.
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:?GF_SECURITY_ADMIN_PASSWORD must be set in .env}
+      # WAL mode = durable writes even if the container is killed mid-transaction.
+      - GF_DATABASE_WAL=true
     networks:
       - minitwit_net
     deploy:
@@ -96,14 +169,58 @@ services:
           - node.role == manager
       resources:
         limits:
-          memory: 200M
+          memory: 280M
         reservations:
-          memory: 128M
+          memory: 150M
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 120s
+
+  # Daily hot-backup of Grafana's SQLite DB. Keeps 7 rotating snapshots inside
+  # grafana_backups so users/dashboards survive a corrupted grafana.db.
+  # Restore: stop grafana, copy a backup over /var/lib/grafana/grafana.db, restart.
+  grafana-backup:
+    image: alpine:3.20
+    volumes:
+      - grafana_data:/source
+      - grafana_backups:/backups
+    command:
+      - sh
+      - -c
+      - |
+        apk add --no-cache sqlite >/dev/null
+        while true; do
+          STAMP=$$(date +%Y-%m-%d)
+          sqlite3 /source/grafana.db ".backup /backups/grafana-$$STAMP.db" \
+            && echo "[$$(date -Iseconds)] backup ok: grafana-$$STAMP.db" \
+            || echo "[$$(date -Iseconds)] backup FAILED"
+          find /backups -name 'grafana-*.db' -mtime +7 -delete
+          sleep 86400
+        done
+    networks:
+      - minitwit_net
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          memory: 32M
+        reservations:
+          memory: 16M
+      restart_policy:
+        condition: on-failure
+        delay: 30s
+        max_attempts: 5
+        window: 300s
 
   node-exporter:
-    image: prom/node-exporter:latest
-    ports:
-      - "9100:9100"
+    image: prom/node-exporter:v1.8.2
+    # No host port — Prometheus scrapes us via overlay DNS
+    # (`tasks.node-exporter:9100`).
     networks:
       - minitwit_net
     deploy:
@@ -113,6 +230,11 @@ services:
           memory: 64M
         reservations:
           memory: 32M
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 120s
 
   loki:
     image: grafana/loki:2.9.4
@@ -121,7 +243,11 @@ services:
       - ./monitoring/loki-config.yaml:/etc/loki/loki-config.yaml
       - loki_data:/loki
     ports:
-      - "3100:3100"
+      - target: 3100
+        published: 3100
+        protocol: tcp
+        mode: host
+        host_ip: 127.0.0.1
     networks:
       - minitwit_net
     deploy:
@@ -131,9 +257,14 @@ services:
           - node.role == manager
       resources:
         limits:
-          memory: 350M
+          memory: 280M
         reservations:
-          memory: 256M
+          memory: 150M
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 120s
 
   promtail:
     image: grafana/promtail:2.9.4
@@ -150,9 +281,14 @@ services:
       mode: global
       resources:
         limits:
-          memory: 64M
+          memory: 80M
         reservations:
-          memory: 32M
+          memory: 40M
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 120s
 
 configs:
   promtail_config:
@@ -162,4 +298,5 @@ configs:
 volumes:
   prometheus_data:
   grafana_data:
+  grafana_backups:
   loki_data:

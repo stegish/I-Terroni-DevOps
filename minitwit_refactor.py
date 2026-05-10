@@ -24,7 +24,7 @@ from models import Follower, Message, User
 
 # Configuration
 PER_PAGE = 30
-SECRET_KEY = os.environ.get("SECRET_KEY", "development key")
+SECRET_KEY = os.environ["SECRET_KEY"]
 
 
 def prometheus_tween_factory(handler, registry):

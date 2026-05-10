@@ -1,4 +1,6 @@
+import base64
 import logging
+import os
 import time
 from datetime import datetime
 
@@ -20,13 +22,18 @@ from metrics import (
 )
 from models import Follower, LatestCommand, Message, User
 
+# Compute the expected Authorization header once at startup.
+# The SIMULATOR_BASIC_AUTH env var holds the simulator's password.
+# Fail fast if it's missing so a misconfigured container is caught immediately.
+_SIMULATOR_AUTH = "Basic " + base64.b64encode(f"simulator:{os.environ['SIMULATOR_BASIC_AUTH']}".encode()).decode()
+
 logger = logging.getLogger(__name__)
 
 
 def require_simulator_auth(request):
     """checks if the request contains the authorization header"""
     auth_header = request.headers.get("Authorization")
-    if auth_header != "Basic c2ltdWxhdG9yOnN1cGVyX3NhZmUh":
+    if auth_header != _SIMULATOR_AUTH:
         raise HTTPForbidden(
             json={
                 "status": 403,

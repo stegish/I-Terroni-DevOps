@@ -1,0 +1,43 @@
+# Secrets — must never end up in any image.
+.env
+.env.*
+*.pem
+*.key
+
+# VCS / IDE / agent artifacts.
+.git
+.gitignore
+.github
+.claude
+.vagrant
+.vscode
+.idea
+
+# Python build / cache artifacts.
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Local dev data.
+out/
+*.sqlite
+*.sqlite3
+*.db
+
+# Documentation & infra files that don't belong in a runtime image.
+README.md
+SECURITY.md
+Vagrantfile
+docker-compose.yml
+nginx/
+scripts/
+monitoring/
+logging/
+simulator/
+
+# OS junk.
+.DS_Store
+Thumbs.db
