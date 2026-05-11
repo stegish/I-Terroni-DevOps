@@ -28,7 +28,16 @@ We fixed it with three distinct layers:
 
 ## Infrastructure & Deployment Documentation
 
-We deploy our software using a Virtual Machine (Droplet) hosted on **DigitalOcean**, fully automated via **Vagrant** (Infrastructure as Code). 
+We deploy on **DigitalOcean** with a 3-node Docker Swarm (1 manager + 2 workers). The cluster is provisioned declaratively from [`infrastructure/`](infrastructure/) using **Terraform** — see [`docs/infrastructure-as-code.md`](docs/infrastructure-as-code.md) for the full design rationale, tradeoff analysis, and deployment view. Quick reference:
+
+```bash
+cd infrastructure/
+export TF_VAR_do_token=dop_v1_...
+./bring-up.sh     # apply Terraform + scp + deploy.sh on manager
+./teardown.sh     # destroy everything (used between simulator stop and exam day)
+```
+
+The original [`Vagrantfile`](Vagrantfile) is kept for single-node local experiments only; production goes through Terraform.
 
 ### 1. Prerequisites
 Before provisioning or deploying, ensure you have the following installed on your local machine (all the following command had been tested on Ubuntu 22.04):
