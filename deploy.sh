@@ -21,7 +21,8 @@ export PROMTAIL_CONFIG_NAME="promtail_config_${HASH}"
 # redeploy. Inject the config hash as a label so any change (e.g. after
 # scripts/setup-tls.sh has rewritten nginx.conf to HTTPS mode) forces a
 # rolling restart of the nginx service.
-export NGINX_CONFIG_VERSION="$(sha256sum ./nginx/nginx.conf | cut -c1-8)"
+NGINX_CONFIG_VERSION="$(sha256sum ./nginx/nginx.conf | cut -c1-8)"
+export NGINX_CONFIG_VERSION
 
 echo "2. Ensuring config '${PROMTAIL_CONFIG_NAME}' exists..."
 if ! sudo docker config inspect "$PROMTAIL_CONFIG_NAME" > /dev/null 2>&1; then
