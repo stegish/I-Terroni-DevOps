@@ -191,7 +191,7 @@ jobs:
           tags: minitwitimage:ci
 
       - name: Trivy scan (fail on HIGH/CRITICAL)
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: minitwitimage:ci
           format: table
@@ -202,7 +202,7 @@ jobs:
 
       - name: Trivy scan (SARIF, for GitHub Security tab — non-blocking)
         if: always()
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: minitwitimage:ci
           format: sarif
