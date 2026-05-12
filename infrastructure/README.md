@@ -63,6 +63,7 @@ that value into the `DROPLET_IP` GitHub secret so CI/CD can SSH in.
 | Preview a change           | `terraform plan`                                                |
 | Add a worker               | edit `worker_count` in `terraform.tfvars`, `terraform apply`   |
 | SSH to manager             | `$(terraform output -raw ssh_manager)`                         |
+| Re-run health checks only  | `./verify.sh`                                                  |
 
 The `bring-up.sh` / `teardown.sh` pair exists specifically for the
 exam-prep flow ([slides §33](../IaC.pdf)): tear down to stop paying when

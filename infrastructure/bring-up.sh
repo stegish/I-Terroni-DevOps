@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Ricostruisce l'intera infra + deploya l'app. Pensato per il flusso
-# pre-esame: dopo aver spento tutto con teardown.sh, basta un comando
-# per essere di nuovo online.
+# pre-esame: dopo aver spento tutto con teardown.sh, basta un singolo
+# command per essere di nuovo online.
 #
 # Sequenza:
 #   1. terraform apply  → 3 droplet + swarm + firewall + (DNS opzionale)
@@ -39,9 +39,12 @@ scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
   -r ../docker-compose.yml ../deploy.sh ../monitoring ../logging ../nginx ../scripts "$ENV_FILE" \
   "root@${MANAGER_IP}:/root/"
 
-echo "==> 4/4 deploy stack sul manager"
+echo "==> 4/5 deploy stack sul manager"
 ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
   "root@${MANAGER_IP}" "cd /root && bash deploy.sh"
+
+echo "==> 5/5 verify (topology + swarm health + idempotency)"
+./verify.sh
 
 echo
 echo "==> Up. Manager: http://${MANAGER_IP}/"

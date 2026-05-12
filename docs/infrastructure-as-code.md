@@ -180,7 +180,35 @@ which network paths exist between nodes. A UML deployment diagram in
 the report uses the same topology with proper `node` / `artifact`
 notation.
 
-## 6. CI/CD integration
+## 6. Verifying an apply
+
+[`infrastructure/verify.sh`](../infrastructure/verify.sh) runs three
+post-apply checks and is invoked automatically as the last step of
+`bring-up.sh`:
+
+1. **Topology** — `terraform output` exposes the manager IP and the
+   list of worker IPs; the script asserts the worker count matches
+   `EXPECTED_WORKERS` (default 2). Catches the case where someone
+   tweaked `worker_count` without intending to.
+2. **Swarm health** — SSHes into the manager and runs
+   `docker node ls`, expecting every node to report `Ready`. This is
+   the proof that `swarm init` and the two `swarm join`s actually
+   succeeded; if a `remote-exec` failed silently, `terraform apply`
+   could still report success while the cluster is half-formed.
+3. **Idempotency** — runs `terraform plan -detailed-exitcode`
+   immediately after `apply`. Exit code 0 means no diff, 2 means there
+   are still pending changes (i.e. a provisioner mutates state on every
+   run, which is a bug). This is the cheapest test of "I can re-run
+   this apply safely tomorrow."
+
+We did **not** add an automated test for the cloud firewall blocking
+the swarm overlay ports (2377/7946/4789) from the public internet.
+Doing it properly requires a probe from outside the VPC — either a
+disposable scanning droplet or a hosted scanner — and the firewall is
+declared as four `inbound_rule` blocks with `source_tags = ["minitwit"]`
+that are visible on the page; the evidence is in the code.
+
+## 7. CI/CD integration
 
 GitHub Actions still SSHes into the manager using the IP stored in
 `secrets.DROPLET_IP`. The promotion path from Terraform output to that
