@@ -12,6 +12,13 @@ if [[ -f .env ]]; then
   set +a
 fi
 
+# nginx bind-mounts /etc/letsencrypt and /var/www/certbot from the host.
+# On a fresh droplet these don't exist yet (setup-tls.sh creates them on
+# first TLS bootstrap), and the swarm scheduler rejects the nginx task
+# with "bind source path does not exist". Pre-create the dirs as empty —
+# nginx in HTTP-only mode tolerates them being empty.
+sudo mkdir -p /etc/letsencrypt /var/www/certbot
+
 echo "1. Computing promtail config version..."
 HASH=$(sha256sum ./logging/promtail-config.yml | cut -c1-8)
 export PROMTAIL_CONFIG_NAME="promtail_config_${HASH}"
