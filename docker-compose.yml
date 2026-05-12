@@ -1,4 +1,6 @@
-version: '3.8'
+# No top-level `version:` key — that forces the legacy v3.x schema which
+# rejects `host_ip` in long-form ports. Without it, Docker validates against
+# the modern Compose Specification, which is what we want here.
 
 # Port-publishing strategy (see SECURITY.md §2.A):
 #
