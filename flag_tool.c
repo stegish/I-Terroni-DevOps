@@ -35,7 +35,7 @@ int main(int argc, char *argv[]) {
     fprintf(stdout, "%s\n", docStr);
   }
   if (argc == 2 && strcmp(argv[1], "-i") == 0) {
-    strcpy(query, "SELECT * FROM message");
+    snprintf(query, sizeof(query), "SELECT * FROM message");
     /* Execute SQL statement */
     rc = sqlite3_exec(db, query, callback, (void *)data, &zErrMsg);
     if (rc != SQLITE_OK) {
@@ -46,8 +46,13 @@ int main(int argc, char *argv[]) {
   if (argc >= 2 && strcmp(argv[1], "-i") != 0 && strcmp(argv[1], "-h") != 0) {
     int i;
     for (i = 1; i < argc; i++) {
-      strcpy(query, "UPDATE message SET flagged=1 WHERE message_id=");
-      strcat(query, argv[i]);
+      int n = snprintf(query, sizeof(query),
+                       "UPDATE message SET flagged=1 WHERE message_id=%s",
+                       argv[i]);
+      if (n < 0 || (size_t)n >= sizeof(query)) {
+        fprintf(stderr, "message_id too long, skipping: %s\n", argv[i]);
+        continue;
+      }
       rc = sqlite3_exec(db, query, callback, (void *)data, &zErrMsg);
       if (rc != SQLITE_OK) {
         fprintf(stderr, "SQL error: %s\n", zErrMsg);

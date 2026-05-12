@@ -61,10 +61,12 @@ def format_datetime(timestamp):
 
 def gravatar_url(email, size=80):
     """Return the gravatar image for the given email address."""
-    return "http://www.gravatar.com/avatar/%s?d=identicon&s=%d" % (
-        md5(email.strip().lower().encode("utf-8")).hexdigest(),
-        size,
-    )
+    # nosemgrep: python.lang.security.insecure-hash-algorithms-md5.insecure-hash-algorithm-md5
+    # Gravatar's public API requires MD5(email) as the avatar URL fragment
+    # (https://docs.gravatar.com/api/avatars/). Not used as a cryptographic
+    # signature — purely an opaque lookup key.
+    email_hash = md5(email.strip().lower().encode("utf-8")).hexdigest()
+    return "http://www.gravatar.com/avatar/%s?d=identicon&s=%d" % (email_hash, size)
 
 
 @subscriber(NewRequest)
