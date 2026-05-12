@@ -130,6 +130,16 @@ jobs:
 
           DATABASE_URL="mysql+pymysql://root:${MYSQL_ROOT_PASSWORD}@mysql:3306/${MYSQL_DATABASE}"
 
+          # Initialize schema once before the app starts. Mirrors what deploy.sh
+          # does on the droplet — see README §9. Without this, MySQL has no
+          # tables and the first /register POST 500s.
+          docker run --rm --network test-net \
+            -e DATABASE_URL="$DATABASE_URL" \
+            -e SECRET_KEY="$SECRET_KEY" \
+            -e SIMULATOR_BASIC_AUTH="$SIMULATOR_BASIC_AUTH" \
+            minitwitimage:ci \
+            python -c "from db import init_db; init_db()"
+
           docker run -d --name minitwit --network test-net \
             -p 8080:5000 \
             -e DATABASE_URL="$DATABASE_URL" \
