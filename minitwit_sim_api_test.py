@@ -3,7 +3,7 @@ import json
 
 import requests
 
-BASE_URL = "http://localhost:8080/"
+BASE_URL = "http://localhost:8080"
 USERNAME = "simulator"
 PWD = "super_safe!"
 CREDENTIALS = ":".join([USERNAME, PWD]).encode("ascii")

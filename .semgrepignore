@@ -1,0 +1,5 @@
+# Generated OpenAPI server stub for the course simulator. Not our code —
+# bundled here only so we can run the simulator locally for integration
+# tests. Excluding the whole tree because semgrep findings on generated
+# code are not actionable.
+out/

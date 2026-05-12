@@ -1,0 +1,14 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+# Alternatively, export TF_VAR_<name> environment variables — same effect.
+
+# Path to the private key matching the SSH key you registered in DigitalOcean.
+ssh_private_key_path = "~/.ssh/id_ed25519"
+
+# Name of that key as it appears in DO → Settings → Security → SSH Keys.
+ssh_key_name = "minitwit"
+
+# Optional: a domain you've delegated to DigitalOcean nameservers.
+# Leave empty to skip DNS records.
+# domain_name = "iterroni.example.com"
+
+# do_token is read from TF_VAR_do_token to keep it out of any file on disk.
