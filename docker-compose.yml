@@ -272,9 +272,8 @@ services:
         max_attempts: 5
         window: 120s
 
-  # MySQL exporter for the managed DigitalOcean database. Reads the DSN from
-  # MYSQLD_EXPORTER_DSN in .env — use a dedicated read-only user with grants
-  # PROCESS, REPLICATION CLIENT, SELECT on performance_schema.
+  # MySQL exporter for the managed DigitalOcean database.
+  # DATA_SOURCE_NAME is the standard DSN env var for mysqld-exporter.
   mysqld-exporter:
     image: prom/mysqld-exporter:v0.15.1
     command:
@@ -285,10 +284,8 @@ services:
       - '--collect.info_schema.tables'
       - '--collect.perf_schema.eventswaits'
       - '--collect.perf_schema.tablelocks'
-      - '--mysqld.address=${MYSQLD_EXPORTER_HOST:?MYSQLD_EXPORTER_HOST must be set in .env}'
-      - '--mysqld.username=${MYSQLD_EXPORTER_USER:?MYSQLD_EXPORTER_USER must be set in .env}'
     environment:
-      - MYSQLD_EXPORTER_PASSWORD=${MYSQLD_EXPORTER_PASSWORD:?MYSQLD_EXPORTER_PASSWORD must be set in .env}
+      - DATA_SOURCE_NAME=${MYSQLD_EXPORTER_USER}:${MYSQLD_EXPORTER_PASSWORD}@tcp(${MYSQLD_EXPORTER_HOST})/${MYSQLD_EXPORTER_DB:-defaultdb}
     networks:
       - minitwit_net
     deploy:
