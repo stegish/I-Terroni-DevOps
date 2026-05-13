@@ -1,18 +1,24 @@
-# No top-level `version:` key — that forces the legacy v3.x schema which
-# rejects `host_ip` in long-form ports. Without it, Docker validates against
-# the modern Compose Specification, which is what we want here.
+# No top-level `version:` key — that pins us to the legacy v3.x schema.
+# We want the modern Compose Specification, which is selected by default
+# when `version:` is absent.
 
 # Port-publishing strategy (see SECURITY.md §2.A):
 #
 #   - Public services (nginx :80, :443) use ingress mode → reachable on the
 #     manager droplet's public IP.
 #   - Admin/observability services (Prometheus, Grafana, Loki) use long-form
-#     `mode: host` + `host_ip: 127.0.0.1` so they bind ONLY to the manager's
-#     loopback. Reach them via SSH tunnel:
-#         ssh -L 3000:127.0.0.1:3000 root@<droplet>
-#     This is necessary because Docker writes iptables rules directly and
-#     bypasses ufw — relying only on ufw to "block" 3000/9090/3100 does NOT
-#     work in Swarm mode (lecture: ElasticSearch ransom story).
+#     `mode: host`. Originally we also set `host_ip: 127.0.0.1` to bind only
+#     to loopback, but the docker stack-deploy parser on the current
+#     droplet's engine rejects that property. Until the droplet is on Docker
+#     >= 24.0.x (which the new Terraform-provisioned droplets are), these
+#     services bind to 0.0.0.0:{3000,9090,3100} on the host. They're
+#     protected by:
+#         (a) `mode: host` bypasses Swarm ingress, so iptables-DOCKER doesn't
+#             punch through — ufw rules on the host actually apply.
+#         (b) the DigitalOcean cloud firewall declared in
+#             infrastructure/firewall.tf rejects these ports at the cloud
+#             edge once the cluster is Terraform-managed.
+#     Reach them via SSH tunnel: `ssh -L 3000:127.0.0.1:3000 root@<droplet>`.
 #   - minitwit, node-exporter, promtail have NO host port — they're reached
 #     via Swarm overlay DNS (tasks.<service>:<port>), which is what nginx and
 #     Prometheus already do.
@@ -125,7 +131,6 @@ services:
         published: 9090
         protocol: tcp
         mode: host
-        host_ip: 127.0.0.1
     networks:
       - minitwit_net
     deploy:
@@ -151,7 +156,6 @@ services:
         published: 3000
         protocol: tcp
         mode: host
-        host_ip: 127.0.0.1
     volumes:
       - ./monitoring/grafana/provisioning/:/etc/grafana/provisioning/
       - ./monitoring/grafana/dashboards/:/var/lib/grafana/dashboards/
@@ -249,7 +253,6 @@ services:
         published: 3100
         protocol: tcp
         mode: host
-        host_ip: 127.0.0.1
     networks:
       - minitwit_net
     deploy:
