@@ -1,8 +1,10 @@
 __pycache__
 flag_tool
-*.pyc 
+*.pyc
 mergefile.py
 merge.txt
 .env
 .vagrant/
 .claude
+
+out/

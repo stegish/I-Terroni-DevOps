@@ -1,44 +1,77 @@
 #!/usr/bin/env bash
+# Local-dev wrapper around docker compose for MiniTwit.
+#
+# Wraps the same subcommands as the original Session 1 helper (init / start /
+# startprod / stop / inspectdb / flag) but runs everything through docker
+# compose instead of a host-local Python + SQLite setup. The production stack
+# uses docker stack deploy on the swarm; this script is the equivalent for a
+# developer machine.
+#
+# Requirements:
+#   - docker + docker compose plugin installed
+#   - .env in the repo root with at least DATABASE_URL, SECRET_KEY,
+#     SIMULATOR_BASIC_AUTH, GF_SECURITY_ADMIN_PASSWORD set
+#
+# Note: docker-compose.yml is written for Swarm (deploy: keys, configs:
+# external, host_ip for ports). `docker compose up` ignores the swarm-only
+# fields and starts a flat dev stack — good enough for local testing.
 
-# Configuration
-PYTHON_CMD="python3"
-APP_MODULE="minitwit_refactor"
-APP_FILE="${APP_MODULE}.py"
-# The Python code uses a relative path 'tmp/minitwit.db', not the system '/tmp/'
-DB_PATH="tmp/minitwit.db" 
+set -euo pipefail
 
-if [ "$1" = "init" ]; then
-    # Ensure the local tmp directory exists as required by the Python code
-    mkdir -p tmp 
+cd "$(dirname "$0")"
 
-    if [ -f "$DB_PATH" ]; then 
-        echo "Database already exists at $DB_PATH."
-        exit 1
+IMAGE="michaelfant/minitwitimage:latest"
+FLAG_IMAGE="michaelfant/flagtoolimage:latest"
+COMPOSE="docker compose"
+
+require_env() {
+  if [[ ! -f .env ]]; then
+    echo "ERROR: .env not found in $(pwd). Create it (see README §2)." >&2
+    exit 1
+  fi
+}
+
+case "${1:-}" in
+  init)
+    require_env
+    echo "Initializing database schema via the app image..."
+    docker run --rm --env-file .env "$IMAGE" \
+      python -c "from db import init_db; init_db()"
+    ;;
+
+  start)
+    require_env
+    echo "Starting MiniTwit stack (foreground)..."
+    $COMPOSE up
+    ;;
+
+  startprod)
+    require_env
+    echo "Starting MiniTwit stack (detached)..."
+    $COMPOSE up -d
+    ;;
+
+  stop)
+    echo "Stopping MiniTwit stack..."
+    $COMPOSE down
+    ;;
+
+  inspectdb)
+    echo "Listing flagged messages via flag_tool..."
+    docker run --rm --env-file .env "$FLAG_IMAGE" ./flag_tool -i
+    ;;
+
+  flag)
+    shift
+    if [[ $# -eq 0 ]]; then
+      echo "Usage: $0 flag <message_id> [<message_id> ...]" >&2
+      exit 1
     fi
-    echo "Initializing database..."
-    $PYTHON_CMD -c "from db import init_db; init_db()"
+    docker run --rm --env-file .env "$FLAG_IMAGE" ./flag_tool "$@"
+    ;;
 
-elif [ "$1" = "startprod" ]; then
-     echo "Starting minitwit with production webserver..."
-     # Note: See 'Important Note' below regarding the Python code structure for Gunicorn
-     nohup gunicorn --workers 4 --timeout 120 --bind 0.0.0.0:5000 "${APP_MODULE}:app" > tmp/out.log 2>&1 &
-
-elif [ "$1" = "start" ]; then
-    echo "Starting minitwit..."
-    # Runs the Python script directly (Development mode)
-    nohup $PYTHON_CMD "$APP_FILE" > tmp/out.log 2>&1 &
-
-elif [ "$1" = "stop" ]; then
-    echo "Stopping minitwit..."
-    # Kills processes matching the new filename
-    pkill -f "$APP_MODULE"
-
-elif [ "$1" = "inspectdb" ]; then
-    ./flag_tool -i | less
-
-elif [ "$1" = "flag" ]; then
-    ./flag_tool "$@"
-
-else
-  echo "I do not know this command..."
-fi
+  *)
+    echo "Usage: $0 {init|start|startprod|stop|inspectdb|flag <args>}"
+    exit 1
+    ;;
+esac

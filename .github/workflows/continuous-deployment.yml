@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write          # for GitHub Release creation in build-and-deploy
   security-events: write   # for SARIF uploads (Semgrep / Trivy)
 
 jobs:
@@ -281,3 +281,19 @@ jobs:
             } > .env &&
             bash deploy.sh
           "
+
+      # ---------- Automatic GitHub Release ----------
+      # Creates a Release for every successful deploy to main, fulfilling the
+      # Session 4 "at least weekly automatic releases" requirement. Tag is
+      # derived from the workflow run number + short SHA so it is unique and
+      # human-readable. SHA-pinned in line with the third-party-action policy
+      # documented in README §11.
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
+        with:
+          tag_name: release-${{ github.run_number }}-${{ github.sha }}
+          name: "Release #${{ github.run_number }} (${{ github.sha }})"
+          generate_release_notes: true
+          target_commitish: ${{ github.sha }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
