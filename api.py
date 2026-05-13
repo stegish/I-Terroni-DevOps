@@ -159,7 +159,6 @@ def api_user_msgs_get(request):
         extra={"route": "api_user_msgs", "username": username, "no": request.GET.get("no", 100)},
     )
 
-    c_add_message.inc()
     update_latest(request)
     require_simulator_auth(request)
 
@@ -216,6 +215,7 @@ def api_user_msgs_post(request):
         new_msg = Message(author_id=user_id, text=content, pub_date=int(time.time()), flagged=0)
         request.db.add(new_msg)
         request.db.commit()
+        c_add_message.inc()
         logger.info(
             "Message posted",
             extra={"route": "api_user_msgs_post", "username": username, "content_length": len(content)},

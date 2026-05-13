@@ -269,10 +269,14 @@ jobs:
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
           SIMULATOR_BASIC_AUTH: ${{ secrets.SIMULATOR_BASIC_AUTH }}
         run: |
-          scp -i ~/.ssh/minitwit.key -o StrictHostKeyChecking=no -r docker-compose.yml deploy.sh monitoring/ logging/ nginx/ scripts/ root@$DROPLET_IP:/vagrant/
+          # Deploy target is /root/ on the manager droplet: that's what the
+          # Terraform-provisioned manager exposes (no Vagrant-style mount).
+          # Aligned with infrastructure/bring-up.sh which also scp's to /root/.
+          ssh -i ~/.ssh/minitwit.key -o StrictHostKeyChecking=no root@$DROPLET_IP "mkdir -p /root/minitwit"
+          scp -i ~/.ssh/minitwit.key -o StrictHostKeyChecking=no -r docker-compose.yml deploy.sh monitoring/ logging/ nginx/ scripts/ root@$DROPLET_IP:/root/minitwit/
 
           ssh -i ~/.ssh/minitwit.key -o StrictHostKeyChecking=no root@$DROPLET_IP "
-            cd /vagrant &&
+            cd /root/minitwit &&
             {
               echo \"DATABASE_URL=$DATABASE_URL\"
               echo \"GF_SECURITY_ADMIN_PASSWORD=$GF_SECURITY_ADMIN_PASSWORD\"
