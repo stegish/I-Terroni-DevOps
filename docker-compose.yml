@@ -242,6 +242,71 @@ services:
         max_attempts: 5
         window: 120s
 
+  # Per-container CPU/memory/network/IO. One task per node (global) so we see
+  # every container on every droplet, including services running only on
+  # workers. Prometheus reaches us via `tasks.cadvisor:8080`.
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    command:
+      - '--housekeeping_interval=15s'
+      - '--docker_only=true'
+      - '--store_container_labels=false'
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    networks:
+      - minitwit_net
+    deploy:
+      mode: global
+      resources:
+        limits:
+          memory: 200M
+        reservations:
+          memory: 80M
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 120s
+
+  # MySQL exporter for the managed DigitalOcean database. Reads the DSN from
+  # MYSQLD_EXPORTER_DSN in .env — use a dedicated read-only user with grants
+  # PROCESS, REPLICATION CLIENT, SELECT on performance_schema.
+  mysqld-exporter:
+    image: prom/mysqld-exporter:v0.15.1
+    command:
+      - '--collect.global_status'
+      - '--collect.global_variables'
+      - '--collect.info_schema.innodb_metrics'
+      - '--collect.info_schema.processlist'
+      - '--collect.info_schema.tables'
+      - '--collect.perf_schema.eventswaits'
+      - '--collect.perf_schema.tablelocks'
+      - '--mysqld.address=${MYSQLD_EXPORTER_HOST:?MYSQLD_EXPORTER_HOST must be set in .env}'
+      - '--mysqld.username=${MYSQLD_EXPORTER_USER:?MYSQLD_EXPORTER_USER must be set in .env}'
+    environment:
+      - MYSQLD_EXPORTER_PASSWORD=${MYSQLD_EXPORTER_PASSWORD:?MYSQLD_EXPORTER_PASSWORD must be set in .env}
+    networks:
+      - minitwit_net
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          memory: 64M
+        reservations:
+          memory: 32M
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 120s
+
   loki:
     image: grafana/loki:2.9.4
     command: -config.file=/etc/loki/loki-config.yaml
