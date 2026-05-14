@@ -36,6 +36,36 @@ if ! sudo docker config inspect "$PROMTAIL_CONFIG_NAME" > /dev/null 2>&1; then
   sudo docker config create "$PROMTAIL_CONFIG_NAME" ./logging/promtail-config.yml
 fi
 
+# mysqld-exporter v0.15+ dropped DATA_SOURCE_NAME. Render a .my.cnf from
+# the credentials in .env and store it as a versioned Docker secret so the
+# exporter can read it from /run/secrets/mysqld_exporter_mycnf.
+echo "2b. Building mysqld-exporter .my.cnf secret..."
+: "${MYSQLD_EXPORTER_USER:?MYSQLD_EXPORTER_USER must be set in .env}"
+: "${MYSQLD_EXPORTER_PASSWORD:?MYSQLD_EXPORTER_PASSWORD must be set in .env}"
+: "${MYSQLD_EXPORTER_HOST:?MYSQLD_EXPORTER_HOST must be set in .env}"
+
+# MYSQLD_EXPORTER_HOST may contain :port (legacy DSN format) or just the
+# hostname. Split it so my.cnf gets `host` and `port` cleanly.
+MYSQLD_HOST_PART="${MYSQLD_EXPORTER_HOST%%:*}"
+MYSQLD_PORT_PART="${MYSQLD_EXPORTER_HOST##*:}"
+if [ "$MYSQLD_HOST_PART" = "$MYSQLD_PORT_PART" ]; then
+  MYSQLD_PORT_PART="${MYSQLD_EXPORTER_PORT:-25060}"
+fi
+
+MYCNF_CONTENT="[client]
+user=${MYSQLD_EXPORTER_USER}
+password=${MYSQLD_EXPORTER_PASSWORD}
+host=${MYSQLD_HOST_PART}
+port=${MYSQLD_PORT_PART}
+tls=skip-verify
+"
+MYCNF_HASH=$(printf '%s' "$MYCNF_CONTENT" | sha256sum | cut -c1-8)
+export MYSQLD_EXPORTER_MYCNF_NAME="mysqld_exporter_mycnf_${MYCNF_HASH}"
+
+if ! sudo docker secret inspect "$MYSQLD_EXPORTER_MYCNF_NAME" > /dev/null 2>&1; then
+  printf '%s' "$MYCNF_CONTENT" | sudo docker secret create "$MYSQLD_EXPORTER_MYCNF_NAME" -
+fi
+
 # Run schema migration ONCE before any app container starts.
 # Done here (not on app boot) so the 3 swarm replicas don't race on
 # CREATE TABLE and trigger MySQL error 1684.
@@ -51,6 +81,13 @@ echo "5. Cleaning up old promtail configs..."
 for c in $(sudo docker config ls --filter name=promtail_config_ --format '{{.Name}}'); do
   if [ "$c" != "$PROMTAIL_CONFIG_NAME" ]; then
     sudo docker config rm "$c" 2>/dev/null || true
+  fi
+done
+
+echo "5b. Cleaning up old mysqld_exporter_mycnf secrets..."
+for s in $(sudo docker secret ls --filter name=mysqld_exporter_mycnf_ --format '{{.Name}}'); do
+  if [ "$s" != "$MYSQLD_EXPORTER_MYCNF_NAME" ]; then
+    sudo docker secret rm "$s" 2>/dev/null || true
   fi
 done
 

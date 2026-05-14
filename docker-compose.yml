@@ -123,9 +123,18 @@ services:
       - '--storage.tsdb.retention.size=512MB'
       - '--web.console.libraries=/usr/share/prometheus/console_libraries'
       - '--web.console.templates=/usr/share/prometheus/consoles'
+      # Needed for surgical `delete_series` calls to wipe ghost instances
+      # (overlay-IP-labeled series left over by the old DNS-SD scheme).
+      # Port 9090 is bound to host only and protected by the DO firewall,
+      # so exposing the admin API here is acceptable.
+      - '--web.enable-admin-api'
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
+      # Read-only socket so dockerswarm_sd_configs can resolve service
+      # tasks and tag each scrape with the stable Swarm node hostname
+      # instead of the ephemeral overlay IP.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     ports:
       - target: 9090
         published: 9090
@@ -290,12 +299,16 @@ services:
         window: 120s
 
   # MySQL exporter for the managed DigitalOcean database.
-  # DATA_SOURCE_NAME is the standard DSN env var for mysqld-exporter.
-  # `tls=skip-verify` is required because DO managed MySQL enforces TLS but
-  # the container's CA bundle doesn't include DO's intermediate cert.
+  # v0.15+ dropped DATA_SOURCE_NAME; credentials now come from a .my.cnf
+  # file. deploy.sh renders one from .env (MYSQLD_EXPORTER_USER/PASSWORD/
+  # HOST/PORT) into a versioned Docker secret and exports its name as
+  # MYSQLD_EXPORTER_MYCNF_NAME for substitution below.
+  # `tls=skip-verify` keeps DO managed MySQL's intermediate cert working
+  # without bundling it.
   mysqld-exporter:
     image: prom/mysqld-exporter:v0.15.1
     command:
+      - '--config.my-cnf=/run/secrets/mysqld_exporter_mycnf'
       - '--collect.global_status'
       - '--collect.global_variables'
       - '--collect.info_schema.innodb_metrics'
@@ -303,8 +316,9 @@ services:
       - '--collect.info_schema.tables'
       - '--collect.perf_schema.eventswaits'
       - '--collect.perf_schema.tablelocks'
-    environment:
-      - DATA_SOURCE_NAME=${MYSQLD_EXPORTER_USER}:${MYSQLD_EXPORTER_PASSWORD}@tcp(${MYSQLD_EXPORTER_HOST})/${MYSQLD_EXPORTER_DB:-defaultdb}?tls=skip-verify
+    secrets:
+      - source: mysqld_exporter_mycnf
+        target: mysqld_exporter_mycnf
     networks:
       - minitwit_net
     deploy:
@@ -379,6 +393,12 @@ services:
 configs:
   promtail_config:
     name: ${PROMTAIL_CONFIG_NAME:-promtail_config}
+    external: true
+
+secrets:
+  # Rendered + versioned by deploy.sh; rotates whenever any credential changes.
+  mysqld_exporter_mycnf:
+    name: ${MYSQLD_EXPORTER_MYCNF_NAME:-mysqld_exporter_mycnf}
     external: true
 
 volumes:
