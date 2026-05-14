@@ -8,3 +8,23 @@ merge.txt
 .claude
 
 out/
+
+# Terraform local state — contains secrets (SSH keys, tokens, DO API
+# responses).
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# Local plan output — also contains resolved variable values.
+*.tfplan
+
+# Per-developer overrides.
+terraform.tfvars
+*.auto.tfvars
+
+# Provider plugins and module cache.
+.terraform/
+.terraform.lock.hcl
+
+# Worker join token, written by the manager's local-exec provisioner.
+.tokens/
