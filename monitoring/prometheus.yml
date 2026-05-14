@@ -2,69 +2,43 @@ global:
   scrape_interval: 15s
   scrape_timeout: 10s
 
-# We rely on `dockerswarm_sd_configs` (instead of `dns_sd_configs`) so the
-# `instance` label can be set to the stable Swarm node hostname rather than
-# the per-container overlay IP. With DNS-based SD, every redeploy assigns
-# fresh overlay IPs and Prometheus accumulates ghost time-series for the
-# whole retention window, polluting Infrastructure / System Health dashboards.
-# Requires /var/run/docker.sock mounted into the Prometheus container
-# (manager node only).
-
 scrape_configs:
-  # Each minitwit Flask replica. dockerswarm SD enumerates all tasks of the
-  # `minitwit_stack_minitwit` service; we keep only running ones and pin
-  # `instance` to the worker node hostname.
+  # Scrape every minitwit replica.
+  # `tasks.<service>` is a Swarm-internal DNS name that returns the IP of every running task,
+  # unlike `<service>` which only returns one (round-robin) IP per query.
   - job_name: 'minitwit_app'
-    dockerswarm_sd_configs:
-      - host: unix:///var/run/docker.sock
-        role: tasks
+    dns_sd_configs:
+      - names: ['tasks.minitwit']
+        type: 'A'
         port: 5000
+        refresh_interval: 30s
     relabel_configs:
-      - source_labels: [__meta_dockerswarm_service_name]
-        regex: '.*_minitwit$'
-        action: keep
-      - source_labels: [__meta_dockerswarm_task_desired_state]
-        regex: running
-        action: keep
-      - source_labels: [__meta_dockerswarm_node_hostname]
+      - source_labels: [__address__]
         target_label: instance
 
-  # node-exporter runs in `mode: global` (one task per droplet). Label each
-  # scrape with the droplet hostname so the Infrastructure dashboard stays
-  # at 3 instances no matter how many times we redeploy.
+  # node-exporter runs in `mode: global`, so one task per node (manager + each worker).
   - job_name: 'infrastructure_node'
-    dockerswarm_sd_configs:
-      - host: unix:///var/run/docker.sock
-        role: tasks
+    dns_sd_configs:
+      - names: ['tasks.node-exporter']
+        type: 'A'
         port: 9100
+        refresh_interval: 30s
     relabel_configs:
-      - source_labels: [__meta_dockerswarm_service_name]
-        regex: '.*_node-exporter$'
-        action: keep
-      - source_labels: [__meta_dockerswarm_task_desired_state]
-        regex: running
-        action: keep
-      - source_labels: [__meta_dockerswarm_node_hostname]
+      - source_labels: [__address__]
         target_label: instance
 
-  # cAdvisor: same pattern as node-exporter (global, one task per droplet).
+  # cAdvisor runs in `mode: global`, one task per node, scraped via overlay DNS.
   - job_name: 'cadvisor'
-    dockerswarm_sd_configs:
-      - host: unix:///var/run/docker.sock
-        role: tasks
+    dns_sd_configs:
+      - names: ['tasks.cadvisor']
+        type: 'A'
         port: 8080
+        refresh_interval: 30s
     relabel_configs:
-      - source_labels: [__meta_dockerswarm_service_name]
-        regex: '.*_cadvisor$'
-        action: keep
-      - source_labels: [__meta_dockerswarm_task_desired_state]
-        regex: running
-        action: keep
-      - source_labels: [__meta_dockerswarm_node_hostname]
+      - source_labels: [__address__]
         target_label: instance
 
-  # mysqld-exporter has a single replica with a fixed service name; overlay
-  # DNS is stable enough here.
+  # mysqld-exporter scrapes the managed MySQL DB.
   - job_name: 'mysqld_exporter'
     static_configs:
       - targets: ['mysqld-exporter:9104']

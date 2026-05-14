@@ -61,10 +61,12 @@ limits_config:
   # Query limits — the Logs dashboard runs broad `{container=~".+"}`
   # matchers with regex filters; without these the queries time out at
   # Grafana's default plugin timeout and the dashboard fails to load.
+  # NOTE: `max_query_series: 500` was previously here but too tight for
+  # the multi-container matchers (10+ streams × labels). `split_queries_
+  # by_interval` belongs to `query_range` in Loki 2.9, not `limits_config`,
+  # so it was silently ignored — dropped both.
   query_timeout: 60s
-  max_query_series: 500
   max_query_parallelism: 4
-  split_queries_by_interval: 15m
   max_concurrent_tail_requests: 5
 
 # Compactor handles deletion of expired chunks (driven by retention_period above).
