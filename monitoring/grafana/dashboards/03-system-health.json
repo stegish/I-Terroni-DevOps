@@ -1,0 +1,257 @@
+{
+  "annotations": { "list": [] },
+  "description": "System health overview. Answers: is the platform up? Tracks scrape-target health, replica count vs target, container restarts, aggregated error counts, and legacy refactoring hotspots.",
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    { "title": "API / HTTP", "type": "link", "url": "/d/minitwit-api-http", "tags": [], "icon": "external link" },
+    { "title": "Infrastructure", "type": "link", "url": "/d/minitwit-infrastructure", "tags": [], "icon": "external link" },
+    { "title": "Logs", "type": "link", "url": "/d/minitwit-logs", "tags": [], "icon": "external link" }
+  ],
+  "panels": [
+    {
+      "type": "row",
+      "id": 100,
+      "title": "Platform availability",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "description": "How many minitwit app replicas are currently up. Target: 3 (see docker-compose deploy.replicas).",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "yellow", "value": 1 }, { "color": "green", "value": 3 } ] },
+          "unit": "short",
+          "decimals": 0,
+          "max": 3
+        }
+      },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 1 },
+      "id": 1,
+      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "value_and_name" },
+      "targets": [ { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "sum(up{job=\"minitwit_app\"})", "legendFormat": "app replicas up", "refId": "A" } ],
+      "title": "MiniTwit replicas up",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "description": "How many Prometheus scrape targets are responding. Anything red means a service is unreachable.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "yellow", "value": 0.5 }, { "color": "green", "value": 1 } ] },
+          "unit": "percentunit",
+          "decimals": 2,
+          "min": 0,
+          "max": 1
+        }
+      },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 1 },
+      "id": 2,
+      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [ { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "avg(up)", "legendFormat": "targets up", "refId": "A" } ],
+      "title": "Scrape targets healthy",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "description": "Total HTTP 5xx errors in the last 5 min. Aggregated across all replicas and routes.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 10 } ] },
+          "unit": "short",
+          "decimals": 0
+        }
+      },
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 1 },
+      "id": 3,
+      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [ { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "sum(increase(minitwit_http_errors_total{status_class=\"5xx\"}[5m]))", "legendFormat": "5xx (5m)", "refId": "A" } ],
+      "title": "5xx errors (last 5m)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "description": "Total container restarts in the last hour across all nodes. Computed from cAdvisor's container_start_time_seconds.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 } ] },
+          "unit": "short",
+          "decimals": 0
+        }
+      },
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 1 },
+      "id": 4,
+      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [ { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "sum(changes(container_start_time_seconds{name!=\"\"}[1h]))", "legendFormat": "restarts (1h)", "refId": "A" } ],
+      "title": "Container restarts (1h)",
+      "type": "stat"
+    },
+    {
+      "type": "row",
+      "id": 101,
+      "title": "Scrape target inventory",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "description": "Every Prometheus scrape target with current up/down state. Red rows are unreachable.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] },
+          "unit": "short"
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Value" }, "properties": [ { "id": "custom.cellOptions", "value": { "type": "color-background" } }, { "id": "mappings", "value": [ { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } } ] } ] }
+        ]
+      },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 7 },
+      "id": 5,
+      "options": { "showHeader": true },
+      "targets": [ { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "up", "legendFormat": "", "refId": "A", "format": "table", "instant": true } ],
+      "title": "Scrape target health",
+      "type": "table",
+      "transformations": [ { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true }, "indexByName": { "job": 0, "instance": 1, "Value": 2 } } } ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "description": "Up/down state of each scrape target over time. Gaps indicate downtime.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "axisLabel": "up", "drawStyle": "line", "fillOpacity": 30, "lineWidth": 2, "showPoints": "never" },
+          "unit": "short",
+          "min": 0,
+          "max": 1
+        }
+      },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 7 },
+      "id": 6,
+      "options": { "legend": { "calcs": ["min", "max"], "displayMode": "table", "placement": "right", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [ { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "up", "legendFormat": "{{job}} / {{instance}}", "refId": "A" } ],
+      "title": "Target up state over time",
+      "type": "timeseries"
+    },
+    {
+      "type": "row",
+      "id": 102,
+      "title": "Containers",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 16 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "description": "Restarts per container in the last hour. Anything above zero deserves a look — recurring restarts usually point to OOM kills or a crashloop.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "axisLabel": "restarts", "drawStyle": "bars", "fillOpacity": 60, "lineWidth": 1, "showPoints": "never" },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 17 },
+      "id": 7,
+      "options": { "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "right", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [ { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "sum by (name) (changes(container_start_time_seconds{name!=\"\"}[1h]))", "legendFormat": "{{name}}", "refId": "A" } ],
+      "title": "Container restart count (1h, by container)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "description": "Uptime (in hours) per container — based on time since the last cAdvisor-observed start.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "yellow", "value": 0.25 }, { "color": "green", "value": 1 } ] },
+          "unit": "h",
+          "decimals": 2
+        }
+      },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 17 },
+      "id": 8,
+      "options": { "showHeader": true },
+      "targets": [ { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "(time() - max by (name) (container_start_time_seconds{name!=\"\"})) / 3600", "legendFormat": "{{name}}", "refId": "A", "format": "table", "instant": true } ],
+      "title": "Container uptime (h)",
+      "type": "table",
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "instance": true, "job": true, "id": true, "image": true }, "renameByName": { "Value": "uptime (h)", "name": "container" } } },
+        { "id": "sortBy", "options": { "fields": {}, "sort": [ { "field": "uptime (h)", "desc": false } ] } }
+      ]
+    },
+    {
+      "type": "row",
+      "id": 103,
+      "title": "Error aggregate over time",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 26 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "description": "4xx vs 5xx error stream across the whole app. The two series let you see at-a-glance whether a spike is client-driven or server-driven.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "axisLabel": "errors/s", "drawStyle": "line", "fillOpacity": 20, "lineWidth": 2, "showPoints": "never" },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 27 },
+      "id": 9,
+      "options": { "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "right", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [ { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "sum by (status_class) (rate(minitwit_http_errors_total[1m]))", "legendFormat": "{{status_class}}", "refId": "A" } ],
+      "title": "Errors per second by class",
+      "type": "timeseries"
+    },
+    {
+      "type": "row",
+      "id": 104,
+      "title": "Refactoring candidates (legacy counters)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 36 },
+      "collapsed": true,
+      "panels": [
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "description": "Per-function counters left from the refactoring exercise. Hot lines = candidates for optimisation or extraction.",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": { "axisLabel": "calls/s", "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "showPoints": "never" },
+              "unit": "short"
+            }
+          },
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 37 },
+          "id": 10,
+          "options": { "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "right", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+          "targets": [
+            { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "rate(minitwit_fct_update_latest_total[1m])", "legendFormat": "update_latest()", "refId": "A" },
+            { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "rate(minitwit_fct_register_total[1m])", "legendFormat": "register()", "refId": "B" },
+            { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "rate(minitwit_fct_add_message_total[1m])", "legendFormat": "add_message()", "refId": "C" }
+          ],
+          "title": "Function call frequencies",
+          "type": "timeseries"
+        }
+      ]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["minitwit", "health", "ops"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "browser",
+  "title": "MiniTwit — System Health",
+  "uid": "minitwit-system-health",
+  "version": 1
+}

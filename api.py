@@ -86,8 +86,11 @@ def get_latest(request):
 def api_register(request):
     """register a new user via API"""
     c_register.inc()
-    update_latest(request)
+    # Auth before any side-effect (write-after-auth pattern):
+    # unauthenticated callers must NOT be able to mutate LatestCommand
+    # via the `?latest=` query param.
     require_simulator_auth(request)
+    update_latest(request)
     try:
         data = request.json_body
     except ValueError:
@@ -124,8 +127,11 @@ def api_register(request):
 def api_msgs(request):
     """get recent messages"""
     logger.info("Fetching recent messages", extra={"route": "api_msgs", "no": request.GET.get("no", 100)})
-    update_latest(request)
+    # Auth before any side-effect (write-after-auth pattern):
+    # unauthenticated callers must NOT be able to mutate LatestCommand
+    # via the `?latest=` query param.
     require_simulator_auth(request)
+    update_latest(request)
 
     no = int(request.GET.get("no", 100))
     messages_query = (
@@ -159,9 +165,11 @@ def api_user_msgs_get(request):
         extra={"route": "api_user_msgs", "username": username, "no": request.GET.get("no", 100)},
     )
 
-    c_add_message.inc()
-    update_latest(request)
+    # Auth before any side-effect (write-after-auth pattern):
+    # unauthenticated callers must NOT be able to mutate LatestCommand
+    # via the `?latest=` query param.
     require_simulator_auth(request)
+    update_latest(request)
 
     user_id = get_user_id(request, username)
     if user_id is None:
@@ -197,8 +205,11 @@ def api_user_msgs_post(request):
     username = request.matchdict["username"]
     logger.info("Posting message", extra={"route": "api_user_msgs_post", "username": username})
 
-    update_latest(request)
+    # Auth before any side-effect (write-after-auth pattern):
+    # unauthenticated callers must NOT be able to mutate LatestCommand
+    # via the `?latest=` query param.
     require_simulator_auth(request)
+    update_latest(request)
 
     user_id = get_user_id(request, username)
     if user_id is None:
@@ -216,6 +227,7 @@ def api_user_msgs_post(request):
         new_msg = Message(author_id=user_id, text=content, pub_date=int(time.time()), flagged=0)
         request.db.add(new_msg)
         request.db.commit()
+        c_add_message.inc()
         logger.info(
             "Message posted",
             extra={"route": "api_user_msgs_post", "username": username, "content_length": len(content)},
@@ -244,8 +256,11 @@ def api_follows_get(request):
     no = int(request.GET.get("no", 100))
     logger.info("Fetching follows", extra={"route": "api_follows_get", "username": username, "no": no})
 
-    update_latest(request)
+    # Auth before any side-effect (write-after-auth pattern):
+    # unauthenticated callers must NOT be able to mutate LatestCommand
+    # via the `?latest=` query param.
     require_simulator_auth(request)
+    update_latest(request)
 
     user_id = get_user_id(request, username)
     if user_id is None:
@@ -272,8 +287,11 @@ def api_follows_post(request):
     username = request.matchdict["username"]
     logger.info("Follow action", extra={"route": "api_follows_post", "username": username})
 
-    update_latest(request)
+    # Auth before any side-effect (write-after-auth pattern):
+    # unauthenticated callers must NOT be able to mutate LatestCommand
+    # via the `?latest=` query param.
     require_simulator_auth(request)
+    update_latest(request)
 
     user_id = get_user_id(request, username)
     if user_id is None:

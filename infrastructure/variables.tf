@@ -44,9 +44,3 @@ variable "image" {
   type        = string
   default     = "ubuntu-24-04-x64"
 }
-
-variable "domain_name" {
-  description = "Optional domain managed in DigitalOcean. Leave empty to skip DNS records."
-  type        = string
-  default     = ""
-}

@@ -16,7 +16,6 @@ infrastructure is created from here.
 | `digitalocean_droplet.manager`          | 1           | Swarm manager + observability stack (prometheus/grafana/loki) |
 | `digitalocean_droplet.worker`           | `var.worker_count` (2) | Run minitwit replicas                              |
 | `digitalocean_firewall.minitwit`        | 1           | Cloud firewall on every droplet                              |
-| `digitalocean_record.{apex,www}`        | 0 or 2      | DNS records (only if `var.domain_name` is set)               |
 
 What is **not** created here:
 - The managed MySQL database (created once in the DO UI; its `DATABASE_URL`
@@ -63,7 +62,6 @@ that value into the `DROPLET_IP` GitHub secret so CI/CD can SSH in.
 | Preview a change           | `terraform plan`                                                |
 | Add a worker               | edit `worker_count` in `terraform.tfvars`, `terraform apply`   |
 | SSH to manager             | `$(terraform output -raw ssh_manager)`                         |
-| Re-run health checks only  | `./verify.sh`                                                  |
 
 The `bring-up.sh` / `teardown.sh` pair exists specifically for the
 exam-prep flow ([slides §33](../IaC.pdf)): tear down to stop paying when
