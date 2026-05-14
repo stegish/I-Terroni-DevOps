@@ -114,6 +114,12 @@ services:
 
   prometheus:
     image: prom/prometheus:v2.55.1
+    # Run as root so we can read /var/run/docker.sock for dockerswarm_sd.
+    # The default `nobody` user has no access to the docker group on the
+    # host and SD silently returns 0 targets, collapsing every non-static
+    # dashboard. With `mode: host` + DO firewall, exposing port 9090 as
+    # root inside a single-node container has no additional blast radius.
+    user: root
     # Cap retention so the TSDB never blows the manager disk.
     # 7 days of history OR 512MB on disk, whichever comes first.
     command:
