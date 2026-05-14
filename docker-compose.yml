@@ -227,6 +227,18 @@ services:
     image: prom/node-exporter:v1.8.2
     # No host port — Prometheus scrapes us via overlay DNS
     # (`tasks.node-exporter:9100`).
+    # Mount the host filesystem at /host so collector.filesystem sees the
+    # real root fs of the droplet instead of the container's slim image
+    # (otherwise node_filesystem_* only reports docker-injected bind mounts).
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/host'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host:ro,rslave
     networks:
       - minitwit_net
     deploy:
@@ -248,9 +260,14 @@ services:
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.49.1
     command:
-      - '--housekeeping_interval=15s'
+      # 30s housekeeping (was 15s) reduces CPU load and prevents the scrape
+      # from timing out on busy workers — Prometheus' scrape interval is 15s
+      # but the cadvisor /metrics generation itself runs synchronously.
+      - '--housekeeping_interval=30s'
       - '--docker_only=true'
       - '--store_container_labels=false'
+      # Trim heavy collectors we don't render anywhere.
+      - '--disable_metrics=accelerator,cpu_topology,disk,diskIO,hugetlb,memory_numa,referenced_memory,resctrl,sched,tcp,udp,advtcp,process'
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
@@ -274,6 +291,8 @@ services:
 
   # MySQL exporter for the managed DigitalOcean database.
   # DATA_SOURCE_NAME is the standard DSN env var for mysqld-exporter.
+  # `tls=skip-verify` is required because DO managed MySQL enforces TLS but
+  # the container's CA bundle doesn't include DO's intermediate cert.
   mysqld-exporter:
     image: prom/mysqld-exporter:v0.15.1
     command:
@@ -285,7 +304,7 @@ services:
       - '--collect.perf_schema.eventswaits'
       - '--collect.perf_schema.tablelocks'
     environment:
-      - DATA_SOURCE_NAME=${MYSQLD_EXPORTER_USER}:${MYSQLD_EXPORTER_PASSWORD}@tcp(${MYSQLD_EXPORTER_HOST})/${MYSQLD_EXPORTER_DB:-defaultdb}
+      - DATA_SOURCE_NAME=${MYSQLD_EXPORTER_USER}:${MYSQLD_EXPORTER_PASSWORD}@tcp(${MYSQLD_EXPORTER_HOST})/${MYSQLD_EXPORTER_DB:-defaultdb}?tls=skip-verify
     networks:
       - minitwit_net
     deploy:

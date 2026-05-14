@@ -1,6 +1,7 @@
 import base64
 import logging
 import os
+import threading
 import time
 from datetime import datetime
 
@@ -359,18 +360,39 @@ def api_follows_post(request):
     return Response(status=204)
 
 
+# Business gauges are populated from COUNT(*) queries that can be slow on a
+# multi-million-row DB. Running them on every scrape (per replica, every 15s)
+# stalls /metrics past Prometheus' 10s timeout. Refresh at most once per TTL
+# and only in the replica that wins the lock; the others serve the last value.
+_GAUGE_TTL = 30
+_last_gauge_refresh = 0.0
+_gauge_lock = threading.Lock()
+
+
+def _refresh_business_gauges(db):
+    total_users = db.query(User).count()
+    total_messages = db.query(Message).count()
+    total_follows = db.query(Follower).count()
+    g_total_users.set(total_users)
+    g_total_messages.set(total_messages)
+    g_total_follows.set(total_follows)
+    g_avg_followers.set((total_follows / total_users) if total_users > 0 else 0)
+
+
 @view_config(route_name="prometheus_metrics", request_method="GET")
 def metrics(request):
     """exposes prometheus metrics"""
-    try:
-        total_users = request.db.query(User).count()
-        total_messages = request.db.query(Message).count()
-        total_follows = request.db.query(Follower).count()
-        g_total_users.set(total_users)
-        g_total_messages.set(total_messages)
-        g_total_follows.set(total_follows)
-        g_avg_followers.set((total_follows / total_users) if total_users > 0 else 0)
-    except Exception:
-        logger.exception("Failed to refresh business gauges")
+    global _last_gauge_refresh
+    now = time.time()
+    if now - _last_gauge_refresh > _GAUGE_TTL and _gauge_lock.acquire(blocking=False):
+        try:
+            if now - _last_gauge_refresh > _GAUGE_TTL:
+                try:
+                    _refresh_business_gauges(request.db)
+                    _last_gauge_refresh = now
+                except Exception:
+                    logger.exception("Failed to refresh business gauges")
+        finally:
+            _gauge_lock.release()
 
     return Response(generate_latest(), content_type=CONTENT_TYPE_LATEST)
