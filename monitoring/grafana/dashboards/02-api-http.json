@@ -1,0 +1,266 @@
+{
+  "annotations": { "list": [] },
+  "description": "HTTP / API health and performance. Answers: are the endpoints up, fast, and free of errors? SLI strip on top, request mix and error breakdown in the middle, latency distribution and per-endpoint top-N at the bottom.",
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    { "title": "System Health", "type": "link", "url": "/d/minitwit-system-health", "tags": [], "icon": "external link" },
+    { "title": "Logs", "type": "link", "url": "/d/minitwit-logs", "tags": [], "icon": "external link" },
+    { "title": "Database", "type": "link", "url": "/d/minitwit-database", "tags": [], "icon": "external link" }
+  ],
+  "panels": [
+    {
+      "type": "row",
+      "id": 100,
+      "title": "Top-line SLIs (last 5m)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "description": "Percentage of all requests returning 5xx. Burn-rate proxy for the availability SLO.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 } ] },
+          "unit": "percent",
+          "decimals": 2
+        }
+      },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 1 },
+      "id": 1,
+      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [ { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "100 * (sum(rate(minitwit_http_requests_total{status=~\"5..\",route!=\"prometheus_metrics\"}[5m])) / clamp_min(sum(rate(minitwit_http_requests_total{route!=\"prometheus_metrics\"}[5m])), 0.001))", "legendFormat": "5xx %", "refId": "A" } ],
+      "title": "5xx Error Rate",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "description": "Percentage of requests returning 4xx. Includes auth failures and bad input.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 5 }, { "color": "red", "value": 15 } ] },
+          "unit": "percent",
+          "decimals": 2
+        }
+      },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 1 },
+      "id": 2,
+      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [ { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "100 * (sum(rate(minitwit_http_requests_total{status=~\"4..\",route!=\"prometheus_metrics\"}[5m])) / clamp_min(sum(rate(minitwit_http_requests_total{route!=\"prometheus_metrics\"}[5m])), 0.001))", "legendFormat": "4xx %", "refId": "A" } ],
+      "title": "4xx Rate",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "description": "p95 of request duration across all routes. Warns above 500ms, critical above 1s.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 0.5 }, { "color": "red", "value": 1 } ] },
+          "unit": "s",
+          "decimals": 3
+        }
+      },
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 1 },
+      "id": 3,
+      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [ { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "histogram_quantile(0.95, sum(rate(minitwit_http_request_duration_seconds_bucket{route!=\"prometheus_metrics\"}[5m])) by (le))", "legendFormat": "p95", "refId": "A" } ],
+      "title": "Global p95 Latency",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "description": "Total HTTP throughput (req/s) across all routes excluding /metrics scrapes.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "blue", "value": null } ] },
+          "unit": "reqps",
+          "decimals": 2
+        }
+      },
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 1 },
+      "id": 4,
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [ { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "sum(rate(minitwit_http_requests_total{route!=\"prometheus_metrics\"}[1m]))", "legendFormat": "req/s", "refId": "A" } ],
+      "title": "Total Request Rate",
+      "type": "stat"
+    },
+    {
+      "type": "row",
+      "id": 101,
+      "title": "Traffic mix",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "description": "Request rate broken down per route. Filter via the $route variable.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "axisLabel": "req/s", "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "showPoints": "never", "stacking": { "mode": "normal" } },
+          "unit": "reqps"
+        }
+      },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 7 },
+      "id": 5,
+      "options": { "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "right", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [ { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "sum by (route) (rate(minitwit_http_requests_total{route=~\"$route\",route!=\"prometheus_metrics\"}[1m]))", "legendFormat": "{{route}}", "refId": "A" } ],
+      "title": "Request Rate by Route",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "description": "Request rate broken down by HTTP status code.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "axisLabel": "req/s", "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "showPoints": "never" },
+          "unit": "reqps"
+        }
+      },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 7 },
+      "id": 6,
+      "options": { "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "right", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [ { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "sum by (status) (rate(minitwit_http_requests_total{route=~\"$route\",route!=\"prometheus_metrics\"}[1m]))", "legendFormat": "{{status}}", "refId": "A" } ],
+      "title": "Request Rate by Status Code",
+      "type": "timeseries"
+    },
+    {
+      "type": "row",
+      "id": 102,
+      "title": "Latency",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 16 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "description": "p50 / p95 / p99 latency per route. Diverging p99 from p95 often points at GC, cold caches, or DB stalls.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "axisLabel": "seconds", "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "showPoints": "never" },
+          "unit": "s"
+        }
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 17 },
+      "id": 7,
+      "options": { "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "right", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "histogram_quantile(0.50, sum by (le, route) (rate(minitwit_http_request_duration_seconds_bucket{route=~\"$route\",route!=\"prometheus_metrics\"}[5m])))", "legendFormat": "p50 {{route}}", "refId": "A" },
+        { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "histogram_quantile(0.95, sum by (le, route) (rate(minitwit_http_request_duration_seconds_bucket{route=~\"$route\",route!=\"prometheus_metrics\"}[5m])))", "legendFormat": "p95 {{route}}", "refId": "B" },
+        { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "histogram_quantile(0.99, sum by (le, route) (rate(minitwit_http_request_duration_seconds_bucket{route=~\"$route\",route!=\"prometheus_metrics\"}[5m])))", "legendFormat": "p99 {{route}}", "refId": "C" }
+      ],
+      "title": "HTTP Latency p50 / p95 / p99 by Route",
+      "type": "timeseries"
+    },
+    {
+      "type": "row",
+      "id": 103,
+      "title": "Errors",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 27 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "description": "Errors per second broken down per route and status class (4xx vs 5xx).",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "axisLabel": "errors/s", "drawStyle": "bars", "fillOpacity": 60, "lineWidth": 1, "showPoints": "never", "stacking": { "mode": "normal" } },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 28 },
+      "id": 8,
+      "options": { "legend": { "calcs": ["sum", "max"], "displayMode": "table", "placement": "right", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [ { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "sum by (route, status_class) (rate(minitwit_http_errors_total{route=~\"$route\"}[1m]))", "legendFormat": "{{route}} {{status_class}}", "refId": "A" } ],
+      "title": "HTTP Errors by Route & Status Class",
+      "type": "timeseries"
+    },
+    {
+      "type": "row",
+      "id": 104,
+      "title": "Top N",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 37 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "description": "Routes ranked by request volume (last 5 min).",
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "blue", "value": null } ] }, "unit": "reqps", "decimals": 3 }
+      },
+      "gridPos": { "h": 9, "w": 8, "x": 0, "y": 38 },
+      "id": 9,
+      "options": { "showHeader": true },
+      "targets": [ { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "topk(10, sum by (route) (rate(minitwit_http_requests_total{route!=\"prometheus_metrics\"}[5m])))", "legendFormat": "{{route}}", "refId": "A", "format": "table", "instant": true } ],
+      "title": "Top 10 busiest routes",
+      "type": "table",
+      "transformations": [ { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "job": true, "instance": true }, "renameByName": { "Value": "req/s" } } } ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "description": "Routes ranked by p95 latency (last 5 min). Watch for new entrants — they're usually your next incident.",
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 0.25 }, { "color": "red", "value": 1 } ] }, "unit": "s", "decimals": 3 }
+      },
+      "gridPos": { "h": 9, "w": 8, "x": 8, "y": 38 },
+      "id": 10,
+      "options": { "showHeader": true },
+      "targets": [ { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "topk(10, histogram_quantile(0.95, sum by (le, route) (rate(minitwit_http_request_duration_seconds_bucket{route!=\"prometheus_metrics\"}[5m]))))", "legendFormat": "{{route}}", "refId": "A", "format": "table", "instant": true } ],
+      "title": "Top 10 slowest routes (p95)",
+      "type": "table",
+      "transformations": [ { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "job": true, "instance": true }, "renameByName": { "Value": "p95 (s)" } } } ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "description": "Routes ranked by error rate (4xx+5xx) over the last 5 min.",
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 0.05 }, { "color": "red", "value": 0.5 } ] }, "unit": "short", "decimals": 3 }
+      },
+      "gridPos": { "h": 9, "w": 8, "x": 16, "y": 38 },
+      "id": 11,
+      "options": { "showHeader": true },
+      "targets": [ { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "topk(10, sum by (route) (rate(minitwit_http_errors_total[5m])))", "legendFormat": "{{route}}", "refId": "A", "format": "table", "instant": true } ],
+      "title": "Top 10 routes by error rate",
+      "type": "table",
+      "transformations": [ { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "job": true, "instance": true }, "renameByName": { "Value": "errors/s" } } } ]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["minitwit", "api", "http", "slo"],
+  "templating": {
+    "list": [
+      {
+        "name": "route",
+        "label": "Route",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "Prometheus" },
+        "query": { "query": "label_values(minitwit_http_requests_total{route!=\"prometheus_metrics\"}, route)", "refId": "Prometheus-route" },
+        "refresh": 2,
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "sort": 1
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "browser",
+  "title": "MiniTwit — API / HTTP",
+  "uid": "minitwit-api-http",
+  "version": 1
+}
