@@ -1,91 +1,290 @@
 {
-  "annotations": { "list": [] },
+  "annotations": {
+    "list": []
+  },
   "description": "Centralised log view. Answers: what is going wrong and where? Promtail captures every container on every node; this board lets you slice by $container and $severity, surfaces the noisiest error messages, and proves that every expected container is actually emitting logs.",
   "editable": true,
   "graphTooltip": 0,
   "id": null,
   "links": [
-    { "title": "API / HTTP", "type": "link", "url": "/d/minitwit-api-http", "tags": [], "icon": "external link" },
-    { "title": "System Health", "type": "link", "url": "/d/minitwit-system-health", "tags": [], "icon": "external link" }
+    {
+      "title": "API / HTTP",
+      "type": "link",
+      "url": "/d/minitwit-api-http",
+      "tags": [],
+      "icon": "external link"
+    },
+    {
+      "title": "System Health",
+      "type": "link",
+      "url": "/d/minitwit-system-health",
+      "tags": [],
+      "icon": "external link"
+    }
   ],
   "panels": [
     {
       "type": "row",
       "id": 100,
       "title": "Log throughput KPIs (last 5m)",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
       "collapsed": false,
       "panels": []
     },
     {
-      "datasource": { "type": "loki", "uid": "Loki" },
+      "datasource": {
+        "type": "loki",
+        "uid": "Loki"
+      },
       "description": "Total lines/s ingested across every container.",
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
-          "thresholds": { "mode": "absolute", "steps": [ { "color": "blue", "value": null } ] },
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
           "unit": "logs",
           "decimals": 1
         }
       },
-      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 1 },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
       "id": 1,
-      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
-      "targets": [ { "datasource": { "type": "loki", "uid": "Loki" }, "expr": "sum(rate({container=~\".+\"}[1m]))", "legendFormat": "logs/s", "refId": "A" } ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "Loki"
+          },
+          "expr": "sum(rate({container=~\".+\"}[1m]))",
+          "legendFormat": "logs/s",
+          "refId": "A"
+        }
+      ],
       "title": "Total log rate",
       "type": "stat"
     },
     {
-      "datasource": { "type": "loki", "uid": "Loki" },
+      "datasource": {
+        "type": "loki",
+        "uid": "Loki"
+      },
       "description": "Error-level lines per second (case-insensitive match on 'error' or 'exception').",
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
-          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 0.5 }, { "color": "red", "value": 5 } ] },
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.5
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
           "unit": "logs",
           "decimals": 2
         }
       },
-      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 1 },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
       "id": 2,
-      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
-      "targets": [ { "datasource": { "type": "loki", "uid": "Loki" }, "expr": "sum(rate({container=~\".+\"} |~ \"(?i)error|exception|traceback\"[1m]))", "legendFormat": "errors/s", "refId": "A" } ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "Loki"
+          },
+          "expr": "sum(rate({container=~\".+\"} |~ \"(?i)error|exception|traceback\"[1m]))",
+          "legendFormat": "errors/s",
+          "refId": "A"
+        }
+      ],
       "title": "Error log rate",
       "type": "stat"
     },
     {
-      "datasource": { "type": "loki", "uid": "Loki" },
+      "datasource": {
+        "type": "loki",
+        "uid": "Loki"
+      },
       "description": "Warning-level lines per second (case-insensitive match on 'warn').",
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
-          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 10 } ] },
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          },
           "unit": "logs",
           "decimals": 2
         }
       },
-      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 1 },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
       "id": 3,
-      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
-      "targets": [ { "datasource": { "type": "loki", "uid": "Loki" }, "expr": "sum(rate({container=~\".+\"} |~ \"(?i)warn\"[1m]))", "legendFormat": "warnings/s", "refId": "A" } ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "Loki"
+          },
+          "expr": "sum(rate({container=~\".+\"} |~ \"(?i)warn\"[1m]))",
+          "legendFormat": "warnings/s",
+          "refId": "A"
+        }
+      ],
       "title": "Warning log rate",
       "type": "stat"
     },
     {
-      "datasource": { "type": "loki", "uid": "Loki" },
+      "datasource": {
+        "type": "loki",
+        "uid": "Loki"
+      },
       "description": "Number of distinct containers that have logged in the last 5 minutes. If this drops, Promtail probably missed a container.",
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
-          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "yellow", "value": 3 }, { "color": "green", "value": 6 } ] },
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 3
+              },
+              {
+                "color": "green",
+                "value": 6
+              }
+            ]
+          },
           "unit": "short",
           "decimals": 0
         }
       },
-      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 1 },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
       "id": 4,
-      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
-      "targets": [ { "datasource": { "type": "loki", "uid": "Loki" }, "expr": "count(count by (container) (count_over_time({container=~\".+\"}[5m])))", "legendFormat": "containers", "refId": "A" } ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "Loki"
+          },
+          "expr": "count(count by (container) (count_over_time({container=~\".+\"}[5m])))",
+          "legendFormat": "containers",
+          "refId": "A"
+        }
+      ],
       "title": "Active containers (5m)",
       "type": "stat"
     },
@@ -93,83 +292,308 @@
       "type": "row",
       "id": 101,
       "title": "Per-container coverage",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
       "collapsed": false,
       "panels": []
     },
     {
-      "datasource": { "type": "loki", "uid": "Loki" },
-      "description": "Lines/s by container — apply $container to filter. Empty series = a container that should be logging but isn't.",
+      "datasource": {
+        "type": "loki",
+        "uid": "Loki"
+      },
+      "description": "Lines/s by container \u2014 apply $container to filter. Empty series = a container that should be logging but isn't.",
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "axisLabel": "logs/s", "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "showPoints": "never" },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "logs/s",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "showPoints": "never"
+          },
           "unit": "logs"
         }
       },
-      "gridPos": { "h": 9, "w": 16, "x": 0, "y": 7 },
+      "gridPos": {
+        "h": 9,
+        "w": 16,
+        "x": 0,
+        "y": 7
+      },
       "id": 5,
-      "options": { "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "right", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
-      "targets": [ { "datasource": { "type": "loki", "uid": "Loki" }, "expr": "sum by (container) (rate({container=~\"$container\"}[1m]))", "legendFormat": "{{container}}", "refId": "A" } ],
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "Loki"
+          },
+          "expr": "sum by (container) (rate({container=~\"$container\"}[1m]))",
+          "legendFormat": "{{container}}",
+          "refId": "A"
+        }
+      ],
       "title": "Logs / second by container",
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "loki", "uid": "Loki" },
-      "description": "Presence table. Any container in this list that does NOT have a row here in the last 5 min is silent — investigate.",
-      "fieldConfig": {
-        "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "yellow", "value": 1 }, { "color": "green", "value": 10 } ] }, "unit": "short", "decimals": 0 }
+      "datasource": {
+        "type": "loki",
+        "uid": "Loki"
       },
-      "gridPos": { "h": 9, "w": 8, "x": 16, "y": 7 },
+      "description": "Presence table. Any container in this list that does NOT have a row here in the last 5 min is silent \u2014 investigate.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "green",
+                "value": 10
+              }
+            ]
+          },
+          "unit": "short",
+          "decimals": 0
+        }
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 16,
+        "y": 7
+      },
       "id": 6,
-      "options": { "showHeader": true },
-      "targets": [ { "datasource": { "type": "loki", "uid": "Loki" }, "expr": "sum by (container) (count_over_time({container=~\".+\"}[5m]))", "legendFormat": "{{container}}", "refId": "A", "instant": true } ],
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "Loki"
+          },
+          "expr": "sum by (container) (count_over_time({container=~\".+\"}[5m]))",
+          "legendFormat": "{{container}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
       "title": "Containers seen in last 5m",
       "type": "table",
       "transformations": [
-        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true }, "renameByName": { "Value": "lines" } } },
-        { "id": "sortBy", "options": { "fields": {}, "sort": [ { "field": "lines", "desc": true } ] } }
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true
+            },
+            "renameByName": {
+              "Value": "lines"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "lines",
+                "desc": true
+              }
+            ]
+          }
+        }
       ]
     },
     {
       "type": "row",
       "id": 102,
       "title": "Top errors",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 16 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
       "collapsed": false,
       "panels": []
     },
     {
-      "datasource": { "type": "loki", "uid": "Loki" },
+      "datasource": {
+        "type": "loki",
+        "uid": "Loki"
+      },
       "description": "Containers ranked by number of error/exception lines in the last 5 min. Aim a triage here first.",
       "fieldConfig": {
-        "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 20 } ] }, "unit": "short", "decimals": 0 }
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 20
+              }
+            ]
+          },
+          "unit": "short",
+          "decimals": 0
+        }
       },
-      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 17 },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 17
+      },
       "id": 7,
-      "options": { "showHeader": true },
-      "targets": [ { "datasource": { "type": "loki", "uid": "Loki" }, "expr": "topk(10, sum by (container) (count_over_time({container=~\".+\"} |~ \"(?i)error|exception|traceback\"[5m])))", "legendFormat": "{{container}}", "refId": "A", "instant": true } ],
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "Loki"
+          },
+          "expr": "topk(10, sum by (container) (count_over_time({container=~\".+\"} |~ \"(?i)error|exception|traceback\"[5m])))",
+          "legendFormat": "{{container}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
       "title": "Top 10 containers by error count (5m)",
       "type": "table",
       "transformations": [
-        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true }, "renameByName": { "Value": "errors" } } },
-        { "id": "sortBy", "options": { "fields": {}, "sort": [ { "field": "errors", "desc": true } ] } }
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true
+            },
+            "renameByName": {
+              "Value": "errors"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "errors",
+                "desc": true
+              }
+            ]
+          }
+        }
       ]
     },
     {
-      "datasource": { "type": "loki", "uid": "Loki" },
+      "datasource": {
+        "type": "loki",
+        "uid": "Loki"
+      },
       "description": "Stacked time series of error lines per container. Lets you spot which container's error rate just blew up.",
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "axisLabel": "errors/s", "drawStyle": "bars", "fillOpacity": 60, "lineWidth": 1, "showPoints": "never", "stacking": { "mode": "normal" } },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "errors/s",
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            }
+          },
           "unit": "logs"
         }
       },
-      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 17 },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 17
+      },
       "id": 8,
-      "options": { "legend": { "calcs": ["sum", "max"], "displayMode": "table", "placement": "right", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
-      "targets": [ { "datasource": { "type": "loki", "uid": "Loki" }, "expr": "sum by (container) (rate({container=~\"$container\"} |~ \"(?i)error|exception|traceback\"[1m]))", "legendFormat": "{{container}}", "refId": "A" } ],
+      "options": {
+        "legend": {
+          "calcs": [
+            "sum",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "Loki"
+          },
+          "expr": "sum by (container) (rate({container=~\"$container\"} |~ \"(?i)error|exception|traceback\"[1m]))",
+          "legendFormat": "{{container}}",
+          "refId": "A"
+        }
+      ],
       "title": "Error rate by container (filtered)",
       "type": "timeseries"
     },
@@ -177,17 +601,46 @@
       "type": "row",
       "id": 103,
       "title": "Live stream (filter via $container and $severity)",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 26 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 26
+      },
       "collapsed": false,
       "panels": []
     },
     {
-      "datasource": { "type": "loki", "uid": "Loki" },
+      "datasource": {
+        "type": "loki",
+        "uid": "Loki"
+      },
       "description": "Live tail of log lines matching the selected container(s) and severity regex.",
-      "gridPos": { "h": 14, "w": 24, "x": 0, "y": 27 },
+      "gridPos": {
+        "h": 14,
+        "w": 24,
+        "x": 0,
+        "y": 27
+      },
       "id": 9,
-      "options": { "showLabels": true, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true, "dedupStrategy": "none", "enableLogDetails": true },
-      "targets": [ { "datasource": { "type": "loki", "uid": "Loki" }, "expr": "{container=~\"$container\"} |~ \"(?i)$severity\"", "refId": "A" } ],
+      "options": {
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true,
+        "dedupStrategy": "none",
+        "enableLogDetails": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "Loki"
+          },
+          "expr": "{container=~\"$container\"} |~ \"(?i)$severity\"",
+          "refId": "A"
+        }
+      ],
       "title": "Log stream",
       "type": "logs"
     }
@@ -195,22 +648,34 @@
   "refresh": "10s",
   "schemaVersion": 38,
   "style": "dark",
-  "tags": ["minitwit", "logs", "loki"],
+  "tags": [
+    "minitwit",
+    "logs",
+    "loki"
+  ],
   "templating": {
     "list": [
       {
         "name": "container",
         "label": "Container",
         "type": "query",
-        "datasource": { "type": "loki", "uid": "Loki" },
-        "query": { "label": "container", "refId": "Loki-container", "stream": "", "type": 1 },
-        "definition": "label_values(container)",
+        "datasource": {
+          "type": "loki",
+          "uid": "Loki"
+        },
+        "query": "label_values(container)",
         "refresh": 2,
         "includeAll": true,
         "allValue": ".+",
         "multi": true,
-        "current": { "selected": true, "text": "All", "value": "$__all" },
-        "sort": 1
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "sort": 1,
+        "options": [],
+        "hide": 0
       },
       {
         "name": "severity",
@@ -218,19 +683,49 @@
         "type": "custom",
         "query": ".*,error|exception|traceback,warn,info,debug",
         "options": [
-          { "text": "all", "value": ".*", "selected": true },
-          { "text": "error", "value": "error|exception|traceback", "selected": false },
-          { "text": "warn", "value": "warn", "selected": false },
-          { "text": "info", "value": "info", "selected": false },
-          { "text": "debug", "value": "debug", "selected": false }
+          {
+            "text": "all",
+            "value": ".*",
+            "selected": true
+          },
+          {
+            "text": "error",
+            "value": "error|exception|traceback",
+            "selected": false
+          },
+          {
+            "text": "warn",
+            "value": "warn",
+            "selected": false
+          },
+          {
+            "text": "info",
+            "value": "info",
+            "selected": false
+          },
+          {
+            "text": "debug",
+            "value": "debug",
+            "selected": false
+          }
         ],
-        "current": { "selected": true, "text": "all", "value": ".*" }
+        "current": {
+          "selected": true,
+          "text": "all",
+          "value": ".*"
+        },
+        "multi": false,
+        "includeAll": false,
+        "hide": 0
       }
     ]
   },
-  "time": { "from": "now-1h", "to": "now" },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
   "timezone": "browser",
-  "title": "MiniTwit — Logs & Errors",
+  "title": "MiniTwit \u2014 Logs & Errors",
   "uid": "minitwit-logs",
   "version": 1
 }
