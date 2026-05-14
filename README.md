@@ -143,6 +143,25 @@ We collect and visualize metrics with **Prometheus + Grafana** and logs with **L
 
 Both dashboards are provisioned automatically via the `monitoring/` directory mounted into the Grafana container, so they are available immediately after `docker stack deploy`.
 
+#### Accessing the dashboards (SSH tunnels)
+
+The observability ports on the manager droplet are **not** exposed publicly — they bind to host loopback (or are filtered by the DigitalOcean cloud firewall). Reach them by opening an SSH local-port-forward tunnel from your laptop:
+
+| Service    | Manager port | Tunnel command                                                              | Browse                  |
+| ---------- | ------------ | --------------------------------------------------------------------------- | ----------------------- |
+| Grafana    | `3000`       | `ssh -L 3000:127.0.0.1:3000 root@<manager-ip>`                              | http://localhost:3000   |
+| Prometheus | `9090`       | `ssh -L 9090:127.0.0.1:9090 root@<manager-ip>`                              | http://localhost:9090   |
+| Loki API   | `3100`       | `ssh -L 3100:127.0.0.1:3100 root@<manager-ip>`                              | http://localhost:3100   |
+
+You can also chain them in a single SSH command:
+
+```bash
+ssh -L 3000:127.0.0.1:3000 -L 9090:127.0.0.1:9090 -L 3100:127.0.0.1:3100 \
+    root@<manager-ip>
+```
+
+Grafana login: user `admin`, password = the value of `GF_SECURITY_ADMIN_PASSWORD` in your `.env` (the same one that's set as a GitHub Actions secret for CI deploys). Prometheus and Loki have no auth — that's why they are kept off the public internet entirely.
+
 #### Swarm topology (1 manager + 2 workers)
 
 The cluster is intentionally split so the manager is reserved for the observability stack and never competes with the application for RAM/CPU:
