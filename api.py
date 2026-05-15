@@ -4,12 +4,14 @@ import os
 import threading
 import time
 from datetime import datetime
+
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pyramid.httpexceptions import HTTPForbidden
 from pyramid.response import Response
 from pyramid.view import view_config
 from sqlalchemy import text
 from werkzeug.security import generate_password_hash
+
 from db import get_user_id
 from metrics import (
     c_add_message,
