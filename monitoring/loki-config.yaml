@@ -45,9 +45,9 @@ schema_config:
         period: 24h
 
 ingester:
-  chunk_idle_period: 1h          # flush idle chunks after 1h
+  chunk_idle_period: 10m         # flush idle chunks after 10m (reduces in-memory footprint)
   chunk_target_size: 1048576     # 1MB target chunk size (small, for low-volume)
-  max_chunk_age: 1h
+  max_chunk_age: 10m
   chunk_retain_period: 30s
 
 limits_config:

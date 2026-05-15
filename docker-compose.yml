@@ -73,6 +73,12 @@ services:
     # via Swarm DNS (`tasks.minitwit:5000`).
     networks:
       - minitwit_net
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/', timeout=4)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     deploy:
       replicas: 3
       placement:
@@ -87,8 +93,10 @@ services:
         reservations:
           memory: 128M
       update_config:
+        parallelism: 1
         delay: 10s
         order: start-first
+        failure_action: rollback
       restart_policy:
         condition: any
 
@@ -267,7 +275,7 @@ services:
       - '--docker_only=true'
       - '--store_container_labels=false'
       # Trim heavy collectors we don't render anywhere.
-      - '--disable_metrics=accelerator,cpu_topology,disk,diskIO,hugetlb,memory_numa,referenced_memory,resctrl,sched,tcp,udp,advtcp,process'
+      - '--disable_metrics=cpu_topology,disk,diskIO,hugetlb,memory_numa,referenced_memory,resctrl,sched,tcp,udp,advtcp,process'
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
@@ -294,7 +302,7 @@ services:
   # `tls=skip-verify` is required because DO managed MySQL enforces TLS but
   # the container's CA bundle doesn't include DO's intermediate cert.
   mysqld-exporter:
-    image: prom/mysqld-exporter:v0.15.1
+    image: prom/mysqld-exporter:v0.14.0
     command:
       - '--collect.global_status'
       - '--collect.global_variables'
@@ -343,9 +351,9 @@ services:
           - node.role == manager
       resources:
         limits:
-          memory: 280M
+          memory: 420M
         reservations:
-          memory: 150M
+          memory: 200M
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -353,7 +361,7 @@ services:
         window: 120s
 
   promtail:
-    image: grafana/promtail:2.9.4
+    image: grafana/promtail:3.0.0
     volumes:
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock
