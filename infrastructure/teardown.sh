@@ -1,30 +1,28 @@
 #!/usr/bin/env bash
-# Spegne completamente l'infra (slide 33: "Can you also stop your systems
-# so you don't pay…"). Conserva lo state file: il prossimo `bring-up.sh`
-# ricostruisce esattamente la stessa topologia.
+# Fully shuts down the infrastructure (slide 33: "Can you also stop your
+# systems so you don't pay..."). The state file is preserved: the next
+# `bring-up.sh` rebuilds the exact same topology.
 #
-# Quello che NON viene distrutto:
-#   - il database MySQL gestito (è esterno, gestito a mano in DO UI)
-#   - i record DNS (verranno ricreati al prossimo apply se var.domain_name
-#     è impostata)
-#   - il volume Spaces eventuale per lo state remoto
+# What is NOT destroyed:
+#   - the DO Managed MySQL database (external, created manually in the DO UI)
+#   - any DO Spaces volume used for remote state
 
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
 if [[ -z "${TF_VAR_do_token:-}" ]]; then
-  echo "ERROR: TF_VAR_do_token non impostata. Esporta il token DigitalOcean:"
+  echo "ERROR: TF_VAR_do_token is not set. Export your DigitalOcean token:"
   echo "  export TF_VAR_do_token=dop_v1_..."
   exit 1
 fi
 
-echo "==> Plan di destroy:"
+echo "==> Destroy plan:"
 terraform plan -destroy -out=teardown.tfplan
 
-read -r -p "Procedere con il teardown? (yes/NO) " confirm
+read -r -p "Proceed with teardown? (yes/NO) " confirm
 if [[ "$confirm" != "yes" ]]; then
-  echo "Abortito."
+  echo "Aborted."
   rm -f teardown.tfplan
   exit 0
 fi
@@ -33,5 +31,5 @@ terraform apply teardown.tfplan
 rm -f teardown.tfplan
 
 echo
-echo "==> Infra distrutta. Lo state file è ancora qui (terraform.tfstate)."
-echo "    Esegui infrastructure/bring-up.sh per ricreare tutto."
+echo "==> Infra destroyed. The state file is still here (terraform.tfstate)."
+echo "    Run infrastructure/bring-up.sh to bring everything back up."

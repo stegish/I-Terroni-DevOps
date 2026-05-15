@@ -143,6 +143,25 @@ We collect and visualize metrics with **Prometheus + Grafana** and logs with **L
 
 Both dashboards are provisioned automatically via the `monitoring/` directory mounted into the Grafana container, so they are available immediately after `docker stack deploy`.
 
+#### Accessing the dashboards (SSH tunnels)
+
+The observability ports on the manager droplet are **not** exposed publicly — they bind to host loopback (or are filtered by the DigitalOcean cloud firewall). Reach them by opening an SSH local-port-forward tunnel from your laptop:
+
+| Service    | Manager port | Tunnel command                                                              | Browse                  |
+| ---------- | ------------ | --------------------------------------------------------------------------- | ----------------------- |
+| Grafana    | `3000`       | `ssh -L 3000:127.0.0.1:3000 root@<manager-ip>`                              | http://localhost:3000   |
+| Prometheus | `9090`       | `ssh -L 9090:127.0.0.1:9090 root@<manager-ip>`                              | http://localhost:9090   |
+| Loki API   | `3100`       | `ssh -L 3100:127.0.0.1:3100 root@<manager-ip>`                              | http://localhost:3100   |
+
+You can also chain them in a single SSH command:
+
+```bash
+ssh -L 3000:127.0.0.1:3000 -L 9090:127.0.0.1:9090 -L 3100:127.0.0.1:3100 \
+    root@<manager-ip>
+```
+
+Grafana login: user `admin`, password = the value of `GF_SECURITY_ADMIN_PASSWORD` in your `.env` (the same one that's set as a GitHub Actions secret for CI deploys). Prometheus and Loki have no auth — that's why they are kept off the public internet entirely.
+
 #### Swarm topology (1 manager + 2 workers)
 
 The cluster is intentionally split so the manager is reserved for the observability stack and never competes with the application for RAM/CPU:
@@ -168,6 +187,20 @@ These caps keep the manager droplet safe (~1 GB used out of 25 GB at steady stat
 #### Resource limits
 
 Every service declares both `reservations` (minimum guaranteed) and `limits` (hard cap). Limits prevent a runaway container from killing the whole droplet via OOM.
+
+### 8.b From a Single Droplet to Docker Swarm (and the 10-minute Downtime)
+
+Our initial plan was to keep everything on a **single droplet**, in line with the "do it in the simplest way you can" principle. With the full stack (Pyramid app, MySQL — later moved to DO Managed, Prometheus, Grafana, Loki, Promtail, node-exporter, nginx, certbot, flagtool) we quickly hit a wall: **the droplet did not have enough memory**. Grafana and Loki alone consumed most of the available RAM, and under simulator load the `gunicorn` worker processes of MiniTwit were killed by the OOM-killer.
+
+We therefore moved to a **3-node Docker Swarm topology**: one *manager* running the observability stack (Prometheus, Grafana, Loki) plus the nginx reverse proxy; two *worker* nodes running the MiniTwit replicas (3 replicas with `max_replicas_per_node: 2`, i.e. a 2/1 spread) and the flagtool. Placement constraints are declared in [`docker-compose.yml`](docker-compose.yml) (`node.role == manager` vs `node.role == worker`).
+
+To avoid breaking production during the cutover, we provisioned an **extra staging droplet** and rehearsed the manager+workers topology in isolation: overlay network, Swarm DNS via `tasks.<service>`, Prometheus scraping every replica through DNS-SD, rolling updates with `order: start-first`. Once the staging setup was healthy, we executed the production cutover:
+
+1. On the existing production droplet we ran `docker swarm init`, promoting it to manager.
+2. We provisioned the two new worker droplets and joined them to the cluster.
+3. We deployed the full stack with `docker stack deploy`.
+
+**Measured downtime: approximately 10 minutes** — from the moment the single droplet stopped serving traffic to the moment the manager + workers cluster started responding to the simulator again. The bottleneck was the image pull of `michaelfant/minitwitimage` and `michaelfant/flagtoolimage` on the freshly-joined workers, plus the first `docker stack deploy` which had to create the named volumes and wait for every replica to converge. Pre-pulling the images on the workers before the cutover would have shortened this further, but 10 minutes for a one-shot migration was an acceptable trade-off for a university project.
 
 ### 9. Schema Initialization (one-shot, decoupled from app boot)
 

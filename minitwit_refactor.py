@@ -122,17 +122,16 @@ def timeline(request):
     if not request.user:
         return HTTPFound(location=request.route_url("public_timeline"))
 
-    followed_subquery = (
-        request.db.query(Follower.whom_id).filter(Follower.who_id == request.session["user_id"]).subquery()
-    )
+    user_id = request.session["user_id"]
+
+    followed_records = request.db.query(Follower.whom_id).filter(Follower.who_id == user_id).all()
+    author_ids = [record.whom_id for record in followed_records]
+    author_ids.append(user_id)
 
     messages_query = (
         request.db.query(Message, User)
         .join(User, Message.author_id == User.user_id)
-        .filter(
-            Message.flagged == 0,
-            (User.user_id == request.session["user_id"]) | (User.user_id.in_(followed_subquery)),
-        )
+        .filter(Message.flagged == 0, User.user_id.in_(author_ids))
         .order_by(Message.pub_date.desc())
         .limit(PER_PAGE)
         .all()

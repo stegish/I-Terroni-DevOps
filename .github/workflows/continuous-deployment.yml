@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write          # for GitHub Release creation in build-and-deploy
   security-events: write   # for SARIF uploads (Semgrep / Trivy)
 
 jobs:
@@ -268,16 +268,42 @@ jobs:
           GF_SECURITY_ADMIN_PASSWORD: ${{ secrets.GF_SECURITY_ADMIN_PASSWORD }}
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
           SIMULATOR_BASIC_AUTH: ${{ secrets.SIMULATOR_BASIC_AUTH }}
+          MYSQLD_EXPORTER_HOST: ${{ secrets.MYSQLD_EXPORTER_HOST }}
+          MYSQLD_EXPORTER_USER: ${{ secrets.MYSQLD_EXPORTER_USER }}
+          MYSQLD_EXPORTER_PASSWORD: ${{ secrets.MYSQLD_EXPORTER_PASSWORD }}
         run: |
-          scp -i ~/.ssh/minitwit.key -o StrictHostKeyChecking=no -r docker-compose.yml deploy.sh monitoring/ logging/ nginx/ scripts/ root@$DROPLET_IP:/vagrant/
+          # Deploy target is /root/ on the manager droplet: that's what the
+          # Terraform-provisioned manager exposes (no Vagrant-style mount).
+          # Aligned with infrastructure/bring-up.sh which also scp's to /root/.
+          ssh -i ~/.ssh/minitwit.key -o StrictHostKeyChecking=no root@$DROPLET_IP "mkdir -p /root/minitwit"
+          scp -i ~/.ssh/minitwit.key -o StrictHostKeyChecking=no -r docker-compose.yml deploy.sh monitoring/ logging/ nginx/ scripts/ root@$DROPLET_IP:/root/minitwit/
 
           ssh -i ~/.ssh/minitwit.key -o StrictHostKeyChecking=no root@$DROPLET_IP "
-            cd /vagrant &&
+            cd /root/minitwit &&
             {
               echo \"DATABASE_URL=$DATABASE_URL\"
               echo \"GF_SECURITY_ADMIN_PASSWORD=$GF_SECURITY_ADMIN_PASSWORD\"
               echo \"SECRET_KEY=$SECRET_KEY\"
               echo \"SIMULATOR_BASIC_AUTH=$SIMULATOR_BASIC_AUTH\"
+              echo \"MYSQLD_EXPORTER_HOST=$MYSQLD_EXPORTER_HOST\"
+              echo \"MYSQLD_EXPORTER_USER=$MYSQLD_EXPORTER_USER\"
+              echo \"MYSQLD_EXPORTER_PASSWORD=$MYSQLD_EXPORTER_PASSWORD\"
             } > .env &&
             bash deploy.sh
           "
+
+      # ---------- Automatic GitHub Release ----------
+      # Creates a Release for every successful deploy to main, fulfilling the
+      # Session 4 "at least weekly automatic releases" requirement. Tag is
+      # derived from the workflow run number + short SHA so it is unique and
+      # human-readable. SHA-pinned in line with the third-party-action policy
+      # documented in README §11.
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
+        with:
+          tag_name: release-${{ github.run_number }}-${{ github.sha }}
+          name: "Release #${{ github.run_number }} (${{ github.sha }})"
+          generate_release_notes: true
+          target_commitish: ${{ github.sha }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
