@@ -10,7 +10,7 @@ from pyramid.httpexceptions import HTTPForbidden
 from pyramid.response import Response
 from pyramid.view import view_config
 from werkzeug.security import generate_password_hash
-
+from models import Follower, LatestCommand, Message, User
 from db import get_user_id
 from metrics import (
     c_add_message,
@@ -21,7 +21,6 @@ from metrics import (
     g_total_messages,
     g_total_users,
 )
-from models import Follower, LatestCommand, Message, User
 
 # Compute the expected Authorization header once at startup.
 # The SIMULATOR_BASIC_AUTH env var holds the simulator's password.
@@ -378,7 +377,6 @@ def _refresh_business_gauges(db):
     total_users = get_approx_count('user')
     total_messages = get_approx_count('message')
     total_follows = get_approx_count('follower')
-    
     g_total_users.set(total_users)
     g_total_messages.set(total_messages)
     g_total_follows.set(total_follows)
