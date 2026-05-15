@@ -131,9 +131,7 @@ def timeline(request):
     messages_query = (
         request.db.query(Message, User)
         .join(User, Message.author_id == User.user_id)
-        .filter(
-            Message.flagged == 0,
-            User.user_id.in_(author_ids))
+        .filter(Message.flagged == 0, User.user_id.in_(author_ids))
         .order_by(Message.pub_date.desc())
         .limit(PER_PAGE)
         .all()

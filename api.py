@@ -372,17 +372,22 @@ _gauge_lock = threading.Lock()
 
 def _refresh_business_gauges(db):
     def get_approx_count(table_name):
-        res = db.execute(text(f"SELECT TABLE_ROWS FROM information_schema.tables WHERE table_name = '{table_name}' AND table_schema = DATABASE()"))
+        res = db.execute(
+            text(
+                f"SELECT TABLE_ROWS FROM information_schema.tables WHERE table_name = '{table_name}' AND table_schema = DATABASE()"
+            )
+        )
         row = res.fetchone()
         return row[0] if row else 0
 
-    total_users = get_approx_count('user')
-    total_messages = get_approx_count('message')
-    total_follows = get_approx_count('follower')
+    total_users = get_approx_count("user")
+    total_messages = get_approx_count("message")
+    total_follows = get_approx_count("follower")
     g_total_users.set(total_users)
     g_total_messages.set(total_messages)
     g_total_follows.set(total_follows)
     g_avg_followers.set((total_follows / total_users) if total_users > 0 else 0)
+
 
 @view_config(route_name="prometheus_metrics", request_method="GET")
 def metrics(request):
