@@ -372,17 +372,17 @@ _gauge_lock = threading.Lock()
 
 def _refresh_business_gauges(db):
     def get_approx_count(table_name):
-        res = db.execute(
-            text(
-                f"SELECT TABLE_ROWS FROM information_schema.tables WHERE table_name = '{table_name}' AND table_schema = DATABASE()"
-            )
+        query = text(
+            "SELECT TABLE_ROWS FROM information_schema.tables WHERE table_name = :t_name AND table_schema = DATABASE()"
         )
+        res = db.execute(query, {"t_name": table_name})
         row = res.fetchone()
         return row[0] if row else 0
 
     total_users = get_approx_count("user")
     total_messages = get_approx_count("message")
     total_follows = get_approx_count("follower")
+
     g_total_users.set(total_users)
     g_total_messages.set(total_messages)
     g_total_follows.set(total_follows)
