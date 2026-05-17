@@ -1,334 +1,326 @@
 # I-Terroni-DevOps
 
-Welcome to the **I-Terroni-DevOps** repository for the ITU-MiniTwit application. This project is a micro-blogging platform built with Pyramid and deployed automatically using Docker and Vagrant on DigitalOcean.
+A modern micro-blogging platform built with **Pyramid**, deployed on **DigitalOcean** using **Docker Swarm**, with fully automated CI/CD, monitoring, and logging.
 
-## Why Pyramid over Flask/Bottle
-We didn't use **Bottle + Jinja2** because it requires manually integrating two separate tools—a micro-framework and a template engine.
+---
 
-Flask improves on this but relies on global state (g object), making testing harder—you need to simulate Flask's application context.
+## Description
 
-We eventually chose Pyramid because:
+**I-Terroni-DevOps** is the complete DevOps implementation of ITU-MiniTwit. Users can register, post messages, and follow others. The platform automatically scales with demand, includes real-time monitoring, and deploys with zero downtime.
 
-*Explicit request object*: Attach DB/sessions directly to request.db, clean and testable
+**What It Does:**
+- Multi-user micro-blogging platform
+- Scalable 3-node Docker Swarm cluster
+- Automated CI/CD with GitHub Actions
+- Real-time monitoring (Prometheus + Grafana)
+- Centralized logging (Loki)
+- Infrastructure as Code (Terraform)
+- Automated security & code quality checks
 
-*Consistent structure*: Built-in Jinja2 (pyramid_jinja2), routing, and comprehensive docs
+---
 
-## Database Abstraction Layer (SQLAlchemy)
+## Features
 
-Without abstraction, our code was full with raw SQL queries written directly in functions: `SELECT * FROM user WHERE id=?`. This created chaos—changing databases meant rewriting everything, we risked SQL injection, and business logic got mixed up with SQL strings.
+- **User Management** — Register, login, follow/unfollow users
+- **Micro-blogging** — Post and view tweets/messages
+- **RESTful API** — Full simulator integration support
+- **Scalability** — Automatic load balancing across replicas
+- **HTTPS** — Automatic certificate management (Let's Encrypt)
+- **Zero-downtime Deployments** — Rolling updates with health checks
+- **Message Moderation** — Admin tool to flag malicious content
+- **Monitoring** — 23 application metrics, 6 Grafana dashboards
+- **Testing** — 3-level test pyramid (integration, API, UI)
+- **Code Quality** — 5 static analysis tools + SonarCloud integration
 
-We fixed it with three distinct layers:
+---
 
-**db.py** handles only database connections. It's the single file that imports `sqlite3`.
+## Tech Stack
 
-**models.py** defines User and Message as Python objects. SQLAlchemy automatically translates them into tables and correct queries.
+| Layer | Technology |
+|-------|-----------|
+| **Backend** | Pyramid (Python) + SQLAlchemy ORM |
+| **Database** | MySQL 8 |
+| **Containers** | Docker + Docker Compose |
+| **Orchestration** | Docker Swarm (1 manager + 2 workers) |
+| **Infrastructure** | Terraform + DigitalOcean |
+| **CI/CD** | GitHub Actions |
+| **Monitoring** | Prometheus + Grafana |
+| **Logging** | Loki + Promtail |
+| **Reverse Proxy** | Nginx + Certbot |
+| **Testing** | Pytest + Selenium |
 
-**App functions** now contain only business logic: they ask models for data using simple calls like `User.query.filter_by(id=1).first()`.
+---
 
+## Installation
 
-## Infrastructure & Deployment Documentation
-
-We deploy on **DigitalOcean** with a 3-node Docker Swarm (1 manager + 2 workers). The cluster is provisioned declaratively from [`infrastructure/`](infrastructure/) using **Terraform** — see [`docs/infrastructure-as-code.md`](docs/infrastructure-as-code.md) for the full design rationale, tradeoff analysis, and deployment view. Quick reference:
+### Local Development
 
 ```bash
+# Clone repository
+git clone https://github.com/stegish/I-Terroni-DevOps.git
+cd I-Terroni-DevOps
+
+# Setup Python environment
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Initialize database
+./control.sh init
+
+# Start the full stack
+./control.sh start
+```
+
+**Access the app:**
+- Web UI: http://localhost:8080
+- API: http://localhost:8080/api/latest
+- Grafana: http://localhost:3000 (admin/admin)
+- Prometheus: http://localhost:9090
+
+### Production Deployment
+
+**Prerequisites:**
+- DigitalOcean account
+- Terraform
+- SSH key pair
+
+**Quick Deploy:**
+
+```bash
+# 1. Create .env with your secrets
+export DO_TOKEN="dop_v1_..."
+export TF_VAR_ssh_key_name="your-key"
+export TF_VAR_region="fra1"
+
+# 2. Provision infrastructure
 cd infrastructure/
-export TF_VAR_do_token=dop_v1_...
-./bring-up.sh     # apply Terraform + scp + deploy.sh on manager
-./teardown.sh     # destroy everything (used between simulator stop and exam day)
+terraform apply
+
+# 3. Application auto-deploys via bring-up.sh
+
+# 4. Get manager IP and setup TLS
+MANAGER_IP=$(terraform output -raw manager_ip)
+ssh root@$MANAGER_IP bash /root/minitwit/scripts/setup-tls.sh your-domain.com
+
+# 5. Access via Grafana SSH tunnel
+ssh -L 3000:127.0.0.1:3000 -L 9090:127.0.0.1:9090 root@$MANAGER_IP
 ```
 
-The original [`Vagrantfile`](Vagrantfile) is kept for single-node local experiments only; production goes through Terraform.
+---
 
-### 1. Prerequisites
-Before provisioning or deploying, ensure you have the following installed on your local machine (all the following command had been tested on Ubuntu 22.04):
-* Vagrant
-* The Vagrant DigitalOcean plugin. Install it by running:
-  ```bash
-  vagrant plugin install vagrant-digitalocean
-  ```
+## Usage
 
-### 2. Authentication & Secrets Setup (.env)
-
-Every collaborator must create their own local .env file in the root of the cloned repository. Do not commit this file.
-
-Create a .env file in the project root and add your DigitalOcean details:
+### Run Locally
 
 ```bash
-export DO_TOKEN="your_personal_access_token_here"
-export DO_SSH_KEY_NAME="your_key_name_on_digitalocean"
-export DO_SSH_KEY_PATH="~/.ssh/id_ed25519" #path to your private key
+./control.sh start           # Start services
+./control.sh startprod       # Background mode
+./control.sh stop            # Stop services
+./control.sh init            # Initialize DB
 ```
 
-### 3. Provisioning the Virtual Machine
-
-To create the infrastructure from scratch, our Vagrantfile reads your secrets and spins up an ubuntu-22-04-x64 server in the fra1 region. It also automatically installs Docker and Docker Compose.
-
-    Load your environment variables:
+### Run Tests
 
 ```bash
-    source .env
+pytest                                  # All tests
+pytest minitwit_tests_refactor.py       # Integration tests
+pytest minitwit_sim_api_test.py         # API tests
+pytest test_itu_minitwit_ui.py          # UI tests (Selenium)
+python simulator/minitwit_simulator.py http://localhost:8080 simulator/minitwit_scenario.csv
 ```
-    Tell Vagrant to create the server:
+
+### Code Quality
 
 ```bash
-    vagrant up --provider=digital_ocean
+make lint           # Code style checks
+make typecheck      # Type checking
+make lint-fix       # Auto-format code
+make check          # All checks
 ```
 
-### 4. Deploying the Application
+### Admin Tools
 
-Once the server is running, deploy the latest version of the application using our automated deployment script. This script syncs the project files to the /vagrant folder on the server, stops existing containers, and builds/starts the new ones.
-
-    Ensure the script has execution permissions:
+**Flag malicious messages:**
 ```bash
-    chmod +x deploy_software.sh
+docker run --rm --env-file /root/minitwit/.env michaelfant/minitwitimage:latest python flag_tool.py 123 456
 ```
 
-    Run the deployment script:
+**Export all messages:**
 ```bash
-    ./deploy_software.sh
+docker run --rm --env-file /root/minitwit/.env michaelfant/minitwitimage:latest python flag_tool.py -i > messages.csv
 ```
 
-Upon success, the script will output the public IP and the live URLs for the MiniTwit App (port 8080) and the Simulator API.
-### 5. Testing the Deployment
-
-To verify the deployment was successful, test the live endpoints against the public IP of the server. We use the provided Pytest suite configured for our public server address.
+### Monitor Production
 
 ```bash
-pytest minitwit_sim_api_test.py
+# SSH into manager
+ssh root@<manager-ip>
+
+# Check services
+docker service ls
+docker service ps minitwit_stack_minitwit
+
+# View logs
+docker service logs -f minitwit_stack_minitwit | head -50
+
+# Access Grafana dashboards (via SSH tunnel)
+ssh -L 3000:127.0.0.1:3000 root@<manager-ip>
+# Then browse: http://localhost:3000
 ```
 
-If all tests pass, the application API is correctly tracking the latest variable and handling JSON payloads for registering, following, and tweeting!
+---
 
-### 6. Continuous Integration & Deployment (CI/CD)
+## Architecture
 
-We have transitioned from manual, local builds on the server to a fully automated CI/CD pipeline using **GitHub Actions** and **Docker Hub**. Vagrant serves as our Infrastructure as Code (IaC) tool for **initial provisioning** of the DigitalOcean Droplet. It automates VM creation (`vagrant up --provider=digital_ocean`), Docker installation, and SSH setup via API calls. Post-setup, GitHub Actions handles daily deploys directly via SSH (`deploy.sh`)
+### 3-Node Docker Swarm Topology
 
-#### Architecture Updates
-* **Decoupled Dockerfiles**: We split the original monolithic `Dockerfile` into two distinct images: `Dockerfile-minitwit` and `Dockerfile-minitwit-tests`. `Dockerfile-minitwit` is the production image deployed to the server; `Dockerfile-minitwit-tests` runs exclusively in the CI pipeline and never reaches production, keeping test dependencies and debug code out of the final image. The administrator flag tool (originally a separate C+SQLite binary in its own image) is now a Python script (`flag_tool.py`) shipped inside the production image and invoked via `docker run --rm $IMAGE python flag_tool.py …`; this removed an entire third image and its publishing step from the CI pipeline.
+![Docker Swarm Topology](report/images/Docker_Swarm_Topology.png)
+*AI-generated topology diagram*
 
-#### Why GitHub Actions?
-Since our codebase is already hosted on GitHub and we deploy to DigitalOcean, GitHub Actions was the natural choice for our CD pipeline. It provides several key benefits for our workflow:
-* **Easy Automation**: The entire pipeline is defined in a single YAML file. It automatically kicks off whenever a developer pushes to the `main` branch.
-* **All-in-One Pipeline**: It seamlessly handles building the code, running our Pytest suite, pushing the compiled images to Docker Hub, and triggering the deployment script on our DigitalOcean Droplet via SSH.
-* **Cost-Effective**: It requires no external Jenkins/Bamboo servers to maintain and is completely free for public repositories, making it the perfect fit for our project.
+### Why This Architecture?
 
-### 7. Database Migration (SQLite → MySQL)
+| Design | Reason |
+|--------|--------|
+| **3-node cluster** | Isolates observability from app, prevents memory exhaustion |
+| **Docker Swarm** | Built-in DNS service discovery; simpler than Kubernetes at this scale |
+| **Terraform** | Reproducible infrastructure, state tracking |
+| **GitHub Actions** | Native GitHub integration, no external CI/CD needed |
+| **Prometheus + Grafana** | Industry standard, 11 custom application metrics |
+| **Loki** | Lightweight logging, scales on manager node |
 
-We migrated the production database from SQLite to a **DigitalOcean Managed MySQL 8** instance. Each collaborator must add the `DATABASE_URL` to their local `.env` file using this template:
-```
-DATABASE_URL=mysql+pymysql://<username>:<password>@<host>:25060/<name_database>
-```
+---
 
-The connection string is available in the DigitalOcean control panel under Databases → Connection Details.
+## Monitoring
 
-#### Test vs Production database
+**11 Application Metrics:**
+- HTTP requests, latency (p50/p95/p99), error rates
+- Database query performance
+- User & message counts
+- Follow relationships
 
-The CI pipeline (GitHub Actions) uses **SQLite** for the test step, while production uses **MySQL**. This is an intentional and standard pattern for the following reasons:
+**6 Grafana Dashboards:**
+1. Business metrics (users, messages, engagement)
+2. API performance (requests, latency, errors)
+3. System health (CPU, memory, disk per node)
+4. Infrastructure (service health, replicas)
+5. Database (queries, connections, performance)
+6. Logs (full-text search via Loki)
 
-* No cost: SQLite runs locally in the runner with no external service needed
-* No whitelist issues: entirely in-process, no network involved
-* Fast: no connection latency during tests
-
-SQLAlchemy abstracts the difference between the two engines, so the same ORM models work on both without any code changes. The `DATABASE_URL` injected during tests is `sqlite:///tmp/minitwit.db`; the one injected at deploy time points to the DO MySQL instance via GitHub Secrets.
-
-During the migration to MySQL, the existing SQLite data was not transferred to the new database. As a result, the production database restarted empty and will be filled with the new data of the simulator (16.03.2026).
-
-### 8. Monitoring, Logging & Cluster Topology
-
-We collect and visualize metrics with **Prometheus + Grafana** and logs with **Loki + Promtail**.
-
-* **Hardware dashboard**: infrastructure-level metrics from `node-exporter` (CPU, memory, disk I/O, network traffic) on every Droplet.
-* **Software dashboard**: application-level metrics instrumented in MiniTwit via `prometheus-client` (request counts, response times, endpoint activity).
-* **Logs**: Promtail tails Docker container logs on each node and ships them to Loki, queryable from Grafana.
-
-Both dashboards are provisioned automatically via the `monitoring/` directory mounted into the Grafana container, so they are available immediately after `docker stack deploy`.
-
-#### Accessing the dashboards (SSH tunnels)
-
-The observability ports on the manager droplet are **not** exposed publicly — they bind to host loopback (or are filtered by the DigitalOcean cloud firewall). Reach them by opening an SSH local-port-forward tunnel from your laptop:
-
-| Service    | Manager port | Tunnel command                                                              | Browse                  |
-| ---------- | ------------ | --------------------------------------------------------------------------- | ----------------------- |
-| Grafana    | `3000`       | `ssh -L 3000:127.0.0.1:3000 root@<manager-ip>`                              | http://localhost:3000   |
-| Prometheus | `9090`       | `ssh -L 9090:127.0.0.1:9090 root@<manager-ip>`                              | http://localhost:9090   |
-| Loki API   | `3100`       | `ssh -L 3100:127.0.0.1:3100 root@<manager-ip>`                              | http://localhost:3100   |
-
-You can also chain them in a single SSH command:
-
+**Access Dashboards:**
 ```bash
-ssh -L 3000:127.0.0.1:3000 -L 9090:127.0.0.1:9090 -L 3100:127.0.0.1:3100 \
-    root@<manager-ip>
+ssh -L 3000:127.0.0.1:3000 root@<manager-ip>
+# http://localhost:3000 (admin / <password from .env>)
 ```
 
-Grafana login: user `admin`, password = the value of `GF_SECURITY_ADMIN_PASSWORD` in your `.env` (the same one that's set as a GitHub Actions secret for CI deploys). Prometheus and Loki have no auth — that's why they are kept off the public internet entirely.
+---
 
-#### Swarm topology (1 manager + 2 workers)
+## Testing
 
-The cluster is intentionally split so the manager is reserved for the observability stack and never competes with the application for RAM/CPU:
+### Test Pyramid
 
-| Service | Where it runs | Why |
-| --- | --- | --- |
-| `prometheus`, `grafana`, `loki` | **manager only** (`node.role == manager`) | Stateful — named volumes are bound to the manager so data survives redeploys. |
-| `minitwit` (3 replicas), `flagtool` | **workers only** (`node.role == worker`) | Stateless app workload, kept off the manager. `max_replicas_per_node: 2` forces a 2/1 spread across the two workers instead of all 3 landing on the same node. |
-| `node-exporter`, `promtail` | **every node** (`mode: global`) | One agent per node so per-host metrics and logs are collected. |
+```
+         UI Tests (Selenium)
+        /                \
+   API Tests        Integration Tests
+ (Simulator)        (HTTP requests)
+```
 
-Prometheus uses Swarm's built-in DNS service discovery (`tasks.minitwit`, `tasks.node-exporter`) to scrape **every** replica, not a single round-robin one.
-
-#### Persistence & retention
-
-| Stateful service | Volume | Retention |
-| --- | --- | --- |
-| Prometheus | `prometheus_data` → `/prometheus` | 7 days **OR** 512 MB on disk (whichever first) |
-| Loki | `loki_data` → `/loki` | 7 days, enforced by the compactor (see `monitoring/loki-config.yaml`) |
-| Grafana | `grafana_data` → `/var/lib/grafana` | unbounded (small DB: users, alerts, edited dashboards) |
-
-These caps keep the manager droplet safe (~1 GB used out of 25 GB at steady state).
-
-#### Resource limits
-
-Every service declares both `reservations` (minimum guaranteed) and `limits` (hard cap). Limits prevent a runaway container from killing the whole droplet via OOM.
-
-### 8.b From a Single Droplet to Docker Swarm (and the 10-minute Downtime)
-
-Our initial plan was to keep everything on a **single droplet**, in line with the "do it in the simplest way you can" principle. With the full stack (Pyramid app, MySQL — later moved to DO Managed, Prometheus, Grafana, Loki, Promtail, node-exporter, nginx, certbot, flagtool) we quickly hit a wall: **the droplet did not have enough memory**. Grafana and Loki alone consumed most of the available RAM, and under simulator load the `gunicorn` worker processes of MiniTwit were killed by the OOM-killer.
-
-We therefore moved to a **3-node Docker Swarm topology**: one *manager* running the observability stack (Prometheus, Grafana, Loki) plus the nginx reverse proxy; two *worker* nodes running the MiniTwit replicas (3 replicas with `max_replicas_per_node: 2`, i.e. a 2/1 spread) and the flagtool. Placement constraints are declared in [`docker-compose.yml`](docker-compose.yml) (`node.role == manager` vs `node.role == worker`).
-
-To avoid breaking production during the cutover, we provisioned an **extra staging droplet** and rehearsed the manager+workers topology in isolation: overlay network, Swarm DNS via `tasks.<service>`, Prometheus scraping every replica through DNS-SD, rolling updates with `order: start-first`. Once the staging setup was healthy, we executed the production cutover:
-
-1. On the existing production droplet we ran `docker swarm init`, promoting it to manager.
-2. We provisioned the two new worker droplets and joined them to the cluster.
-3. We deployed the full stack with `docker stack deploy`.
-
-**Measured downtime: approximately 10 minutes** — from the moment the single droplet stopped serving traffic to the moment the manager + workers cluster started responding to the simulator again. The bottleneck was the image pull of `michaelfant/minitwitimage` and `michaelfant/flagtoolimage` on the freshly-joined workers, plus the first `docker stack deploy` which had to create the named volumes and wait for every replica to converge. Pre-pulling the images on the workers before the cutover would have shortened this further, but 10 minutes for a one-shot migration was an acceptable trade-off for a university project.
-
-### 9. Schema Initialization (one-shot, decoupled from app boot)
-
-**Where it runs:** as a dedicated step in `deploy.sh`, before `docker stack deploy`. The same step is mirrored in the CI `test` job.
-
-**What it does:** runs `Base.metadata.create_all(bind=engine)` exactly once against MySQL via a throwaway container:
+**Run Tests:**
 ```bash
-docker run --rm --env-file .env michaelfant/minitwitimage:latest \
-  python -c "from db import init_db; init_db()"
+pytest                                  # All
+pytest minitwit_tests_refactor.py       # Integration
+pytest minitwit_sim_api_test.py         # API
+pytest test_itu_minitwit_ui.py          # UI
+make check                              # Full CI check locally
 ```
 
-**Why it is no longer done on app boot.** Originally `db.py` called `init_db()` at module import time, so DDL ran every time the application started. With the move to Docker Swarm (3 `minitwit` replicas across 2 worker nodes, plus 3 gunicorn workers per replica) this race condition surfaced in production:
+---
+
+## Deployment Pipeline
 
 ```
-pymysql.err.OperationalError: (1684, "Table 'minitwit'.'latest_command'
-was skipped since its definition is being modified by concurrent DDL statement")
+git push → GitHub Actions
+  ├─ Static analysis (ruff, mypy, shellcheck, codespell)
+  ├─ Tests (pytest + Selenium)
+  ├─ Security scan (Trivy)
+  └─ Deploy to production (docker stack deploy)
 ```
 
-MySQL error **1684** is raised when two sessions try to alter or create the same table at the same time. With up to 9 processes (3 replicas × 3 workers) all calling `create_all()` in parallel during a `start-first` rolling deploy, the losers of the race crashed and Swarm flapped the service.
+**Automatic rollback** if deployment fails. Manual rollback via `git revert + git push`.
 
-**Rule going forward — best practice:** the application image must never run schema migrations on startup. DDL is a deploy-time concern, not a runtime concern, and must be performed by exactly one process. App containers assume the schema already exists.
+---
 
-This pattern also matches how real migration tools (Alembic, Flyway, Liquibase) are run: as a separate, single-shot step in the pipeline, never embedded in the request-serving process.
+## Operations
 
-### 10. Testing & Static Analysis
+### Common Tasks
 
-We integrated three levels of automated testing into the CI pipeline as a quality gate, so if any test fails, deployment is blocked:
-
-* **Integration tests** (`minitwit_tests_refactor.py`) : tests core app functionality (register, login, messages, follow/unfollow) via HTTP requests
-* **API tests** (`minitwit_sim_api_test.py`) : tests the simulator REST endpoints (`/register`, `/msgs`, `/fllws`, `/latest`)
-* **UI & End-to-End tests** (`test_itu_minitwit_ui.py`) : uses Selenium with a remote Chrome container to interact with the browser UI and verify user registration both visually (flash message) and functionally (login)
-
-The pipeline is structured as three sequential jobs in `.github/workflows/continuous-deployment.yml`:
-
-1. **`static-analysis`** — runs all linters/formatters (see below)
-2. **`test`** — needs `static-analysis`; spins up MySQL + the app + Selenium and runs the full test suite
-3. **`build-and-deploy`** — needs `test`; only here are images pushed to Docker Hub and deployed to the Droplet
-
-This ordering guarantees that **broken images never reach Docker Hub** and that **deployment never happens on a failing test suite**.
-
-#### Static Analysis
-
-We added five static analysis tools as quality gates, running before build and deploy:
-
-* **`ruff`** : Python linter and formatter, catches errors, bad practices, unsorted imports
-* **`codespell`** : misspelling checker for source code and comments
-* **`mypy`** : Python static type checker (non-blocking — reports type issues without failing the build)
-* **`hadolint`** : Dockerfile linter, checks best practices for all three Dockerfiles
-* **`shellcheck`** : shell script linter, checks `control.sh` and `deploy.sh`
-
-`hadolint` and `shellcheck` run exclusively in CI since Dockerfiles and shell scripts change rarely and these tools are not straightforward to install on Windows.
-
-`ruff`, `codespell`, and `mypy` are also available locally via the `Makefile` for a faster feedback loop:
-
+**Scale up (add workers):**
 ```bash
-make install-dev   # one-time: install dev tooling
-make lint          # ruff check + ruff format --check + codespell
-make lint-fix      # auto-fix ruff issues + reformat
-make typecheck     # mypy
-make check         # full local CI mirror (lint)
+# Edit infrastructure/variables.tf: worker_count = 3
+terraform apply
+docker service update --force minitwit_stack_minitwit
 ```
 
-Tool configuration lives in `pyproject.toml`.
-
-### 11. Maintainability & Technical Debt (SonarCloud + Codacy)
-
-We continuously measure maintainability and technical debt with two third-party services that scan every push and pull request:
-
-* **[SonarCloud](https://sonarcloud.io)** — provides a Maintainability rating, Reliability rating, Security rating, code smells, bugs, vulnerabilities, duplications, cyclomatic complexity, and the SQALE technical-debt index (in minutes/days).
-* **[Codacy](https://www.codacy.com)** — provides an aggregated quality grade based on multiple engines (`ruff`, `pylint`, `bandit`, `hadolint`, `shellcheck`).
-
-Both run in `.github/workflows/code-quality.yml` and require the following GitHub Actions secrets:
-
-| Secret | Where to obtain |
-| --- | --- |
-| `SONAR_TOKEN` | https://sonarcloud.io → Account → Security → Generate Token |
-| `CODACY_PROJECT_TOKEN` | https://app.codacy.com → Project → Settings → Integrations → Project API |
-
-Project configuration:
-
-* **`sonar-project.properties`** — declares Sonar project key, sources, test paths, and exclusions
-* **`.codacy.yml`** — declares Codacy excluded paths and enabled engines
-
-We react on the issues these tools surface: prominent items (security smells, duplicated blocks, high-complexity functions) are addressed; new code must not regress the metrics. New issues introduced in a PR will appear directly in the SonarCloud / Codacy PR check.
-
-#### Pinning third-party GitHub Actions by commit SHA
-
-Codacy flagged that several third-party actions in `.github/workflows/` were referenced by mutable refs (`@master`, `@v4`). We pinned every third-party action to a full commit SHA, with a trailing comment recording the human-readable version:
-
-```yaml
-uses: SonarSource/sonarcloud-github-action@ffc3010689be73b8e5ae0c57ce35968afd7909e8 # v5.0.0
-uses: codacy/codacy-analysis-cli-action@562ee3e92b8e92df8b67e0a5ff8aa8e261919c08 # v4.4.7
+**View logs:**
+```bash
+ssh root@<manager-ip>
+docker service logs -f minitwit_stack_minitwit | tail -100
 ```
 
-**Why this matters.** A tag (`@v4`) or branch (`@master`) is mutable — the maintainer (or an attacker who compromises their account) can repoint it to a different commit at any time. Because GitHub Actions execute with the workflow's secrets in scope (`SONAR_TOKEN`, `CODACY_PROJECT_TOKEN`, `DOCKER_PASSWORD`, `SSH_KEY`, `DATABASE_URL`), a malicious action could exfiltrate them on the next CI run. A commit SHA is immutable, so the workflow always runs the exact bytes that were reviewed when the pin was added. This is the same hardening guideline GitHub publishes in its [security hardening for GitHub Actions](https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-third-party-actions) documentation.
-
-First-party actions from official orgs (`actions/`, `docker/`, `github/`, `hadolint/`) are kept on version tags for readability, since their compromise model is different (they're maintained by GitHub or vendor security teams, not individual contributors).
-
-**Side effect — Codacy false positive.** A pinned commit SHA is a 40-character hex string, which Codacy's secret scanner pattern-matches as an API key (e.g. *"SonarQube Docs API Key detected"*). To suppress these false positives we excluded `.github/workflows/**` from Codacy in `.codacy.yml`. This is a safe trade-off: none of our enabled Codacy engines (`ruff`, `pylint`, `bandit`, `hadolint`, `shellcheck`) actually inspect workflow YAML, so the only thing we lose is the secret scanner — which was producing nothing but false positives on our SHA pins anyway. Real secret-leak prevention for workflows is enforced separately by GitHub's own push protection and by the principle of never committing secret values (we only reference them via `${{ secrets.* }}`).
-
-### 12. Observability Stack — Bug Fixes (2026-05-15)
-
-During production operation, four bugs were identified via direct SSH diagnostics on the cluster. All fixes are in commit `6716c2f`.
-
-#### cadvisor — invalid `--disable_metrics` value
-
-`accelerator` was listed in the `--disable_metrics` flag, but it is not a recognised metric name in `gcr.io/cadvisor/cadvisor:v0.49.1`. The valid set is `advtcp,app,cpu,cpuLoad,cpu_topology,cpuset,disk,diskIO,hugetlb,memory,memory_numa,network,oom_event,percpu,perf_event,process,referenced_memory,resctrl,sched,tcp,udp`. An unrecognised value causes cadvisor to print its help text and exit with code 2, which made all 3 global tasks fail immediately after Swarm's `max_attempts` were exhausted (0/3). **Fix:** removed `accelerator` from the flag in `docker-compose.yml`.
-
-#### mysqld-exporter — DATA_SOURCE_NAME ignored in v0.15.1
-
-`prom/mysqld-exporter:v0.15.1` changed the startup flow: the exporter now validates a `.my.cnf` config file first and exits with code 1 if none is found, without falling back to the `DATA_SOURCE_NAME` environment variable as previous versions did. This left the service at 0/1 indefinitely. **Fix:** downgraded to `prom/mysqld-exporter:v0.14.0` which fully supports `DATA_SOURCE_NAME`.
-
-#### promtail — Docker API version mismatch on worker nodes
-
-`grafana/promtail:2.9.4` negotiates Docker API v1.42, but Docker Engine 29.1.3 on the two worker droplets requires a minimum client version of 1.44. Promtail on those nodes logged:
-
-```
-Error response from daemon: client version 1.42 is too old. Minimum supported API version is 1.44
+**Restore Grafana backup:**
+```bash
+# Full procedure in extended documentation
+docker service update --mode replicated --replicas 0 minitwit_stack_grafana
+# (restore via docker volume copy)
+docker service update --mode replicated --replicas 1 minitwit_stack_grafana
 ```
 
-This meant zero container discovery (and therefore zero log collection) on both workers. **Fix:** upgraded to `grafana/promtail:3.0.0`.
+### Troubleshooting
 
-#### Loki ingester — push timeout under memory pressure
+| Issue | Fix |
+|-------|-----|
+| App won't start | `docker service logs minitwit_stack_minitwit` |
+| High latency | Check Grafana dashboard 02-api-http & database performance |
+| Disk full | `df -h` → `docker image prune -a` |
+| DB connection fails | Verify `DATABASE_URL` in .env & MySQL instance in DO console |
 
-Promtail on the manager was getting `context deadline exceeded` when posting to `http://loki:3100/loki/api/v1/push`. Root cause: the Loki ingester accumulates chunks in memory for up to `chunk_idle_period` (was `1h`) and `max_chunk_age` (was `1h`). With the 280 MB container memory limit this caused frequent GC pauses long enough for Promtail's HTTP client to time out. **Fix:** reduced both periods to `10m` in `monitoring/loki-config.yaml` and raised the Loki memory limit to 420 MB in `docker-compose.yml`.
+---
 
-#### minitwit — missing healthcheck caused rolling-update downtime
+## Contributing
 
-With no Docker healthcheck declared, Swarm considers a container ready the instant the process starts. Under `order: start-first` the old task is stopped immediately after the new container's process starts — before Flask has had time to establish the database connection and begin serving HTTP. This produced brief windows (visible in Grafana) of fewer than 3 healthy instances during every deploy. **Fix:** added a Python `urllib` healthcheck with a 20-second `start_period`, and made `parallelism: 1` and `failure_action: rollback` explicit in `update_config`.
+This project is developed by:
+- **Michael Fantinato**
+- **Vincenzo Sabino**
+- **Gabriele Matteoli**
+- **Rachele Russo**
+- **Benedek Szabo**
 
-> **AI Disclosure:** Portions of this codebase were generated or optimized using LLMs. All AI-generated logic has been reviewed and tested for accuracy and security.
+
+
+---
+
+
+
+## Acknowledgments
+
+- **ITU MSc "DevOps, Software Evolution and Software Maintenance"** course
+- **Pyramid**, **Docker**, **Terraform**, **Prometheus**, **Grafana** communities
+- TAs: Babette, Patrick, Talha
+- LLM-s
+
+---
+
+## Quick Links
+
+- **GitHub:** [I-Terroni-DevOps](https://github.com/stegish/I-Terroni-DevOps)
+- **Docker Images:** [michaelfant/minitwitimage](https://hub.docker.com/r/michaelfant/minitwitimage)
+- **Live Status:** [Simulator Dashboard](http://138.68.85.121/status.html)
+- **Course:** [ITU MSc Lecture Notes](https://github.com/itu-devops/MSc_lecture_notes)
+
+---
+
+
+> **Note:** Portions of this codebase were generated or optimized using LLMs. All logic has been reviewed and tested for accuracy and security.
