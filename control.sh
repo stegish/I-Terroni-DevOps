@@ -21,7 +21,6 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 IMAGE="michaelfant/minitwitimage:latest"
-FLAG_IMAGE="michaelfant/flagtoolimage:latest"
 COMPOSE="docker compose"
 
 require_env() {
@@ -57,17 +56,19 @@ case "${1:-}" in
     ;;
 
   inspectdb)
+    require_env
     echo "Listing flagged messages via flag_tool..."
-    docker run --rm --env-file .env "$FLAG_IMAGE" ./flag_tool -i
+    docker run --rm --env-file .env "$IMAGE" python flag_tool.py -i
     ;;
 
   flag)
+    require_env
     shift
     if [[ $# -eq 0 ]]; then
       echo "Usage: $0 flag <message_id> [<message_id> ...]" >&2
       exit 1
     fi
-    docker run --rm --env-file .env "$FLAG_IMAGE" ./flag_tool "$@"
+    docker run --rm --env-file .env "$IMAGE" python flag_tool.py "$@"
     ;;
 
   *)

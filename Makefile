@@ -1,15 +1,9 @@
-.PHONY: init build clean lint lint-fix format check test test-unit test-api test-ui all install-dev
+.PHONY: init lint lint-fix format check test test-unit test-api test-ui all install-dev
 
 PYTHON ?= python
 
 init:
 	$(PYTHON) -c "from db import init_db; init_db()"
-
-build:
-	gcc flag_tool.c -l sqlite3 -o flag_tool
-
-clean:
-	rm -f flag_tool
 
 install-dev:
 	$(PYTHON) -m pip install --upgrade pip
