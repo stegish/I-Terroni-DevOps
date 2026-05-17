@@ -15,7 +15,7 @@
 | Issue tracker | <https://github.com/stegish/I-Terroni-DevOps/issues> |
 | Production application | `https://<droplet-IP>/` (DigitalOcean, fra1) |
 | CI/CD pipelines | [`.github/workflows/continuous-deployment.yml`](../.github/workflows/continuous-deployment.yml), [`.github/workflows/code-quality.yml`](../.github/workflows/code-quality.yml) |
-| Container images | `michaelfant/minitwitimage:latest`, `michaelfant/flagtoolimage:latest` on Docker Hub |
+| Container images | `michaelfant/minitwitimage:latest` on Docker Hub |
 | Infrastructure as Code | [`infrastructure/`](../infrastructure/) (Terraform) — see [`docs/infrastructure-as-code.md`](../docs/infrastructure-as-code.md) |
 | Security report | [`SECURITY.md`](../SECURITY.md) |
 | Grafana dashboards | provisioned from [`monitoring/grafana/dashboards/`](../monitoring/grafana/dashboards/) |
@@ -151,7 +151,7 @@ Horizontal scaling is one Terraform variable away (`worker_count`) and one Swarm
 
 The largest single refactor was **introducing SQLAlchemy** ([`db.py`](../db.py), [`models.py`](../models.py), and the new [`minitwit_refactor.py`](../minitwit_refactor.py)). The original code interleaved raw `SELECT * FROM user WHERE id=?` with HTTP handler logic; changing database engine would have meant rewriting every endpoint. We split it into three layers — a thin connection module (`db.py`), declarative ORM models (`models.py`) and pure-business-logic handlers — which then made the **SQLite → MySQL 8 migration** a no-op at the code level: only the `DATABASE_URL` connection string changed. SQLite is still used in CI for speed; SQLAlchemy abstracts the engine so the same tests run in both places.
 
-A second major evolution was **splitting one monolithic Dockerfile into three** (`Dockerfile-minitwit`, `Dockerfile-flagtool`, `Dockerfile-minitwit-tests`). Each image now has a different lifecycle: production, admin utility, and CI-only. The test image carries Selenium, `pytest` and curl; none of that reaches production, which reduced the deployed image and removed several false-positive CVEs reported by Trivy.
+A second major evolution was **splitting the monolithic Dockerfile by lifecycle**. We first separated it into three images (`Dockerfile-minitwit`, `Dockerfile-flagtool`, `Dockerfile-minitwit-tests`) so each had a distinct purpose: production, admin utility, and CI-only. The test image carries Selenium, `pytest` and curl; none of that reaches production, which reduced the deployed image and removed several false-positive CVEs reported by Trivy. After the SQLite→MySQL migration we then collapsed `Dockerfile-flagtool` away entirely: the original C admin tool linked `libsqlite3` against a hard-coded `/tmp/minitwit.db` and stopped working the moment the database backend moved. We rewrote it as a Python script (`flag_tool.py`) reusing `db.py` and the SQLAlchemy models, shipped inside the production image and invoked through `docker run --rm`. The result is two Dockerfiles instead of three, one fewer Docker Hub artifact, and an admin tool that actually targets the production database.
 
 The third evolution was **infrastructure**: we moved from `vagrant up --provider=digital_ocean` (good enough for a single VM) to a **Terraform-managed swarm** of three droplets when we hit the limits of one box. The rationale, trade-offs, and the `remote-exec` "leaky abstraction" we accepted are written up in `docs/infrastructure-as-code.md`.
 

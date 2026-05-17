@@ -51,11 +51,6 @@ jobs:
         with:
           dockerfile: Dockerfile-minitwit
 
-      - name: hadolint (Dockerfile-flagtool)
-        uses: hadolint/hadolint-action@v3.1.0
-        with:
-          dockerfile: Dockerfile-flagtool
-
       - name: hadolint (Dockerfile-minitwit-tests)
         uses: hadolint/hadolint-action@v3.1.0
         with:
@@ -242,14 +237,6 @@ jobs:
           file: ./Dockerfile-minitwit
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/minitwitimage:latest
-
-      - name: Build and push flagtoolimage
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile-flagtool
-          push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/flagtoolimage:latest
 
       - name: Configure SSH
         run: |
