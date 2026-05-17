@@ -22,7 +22,8 @@ jobs:
             texlive-xetex \
             texlive-latex-recommended \
             texlive-latex-extra \
-            fonts-dejavu
+            fonts-dejavu \
+            librsvg2-bin
 
       - name: Build report PDF
         run: |
