@@ -39,3 +39,11 @@ jobs:
         with:
           name: MSc_group_i_report
           path: report/build/MSc_group_i.pdf
+
+      - name: Commit and push PDF to repository
+        if: github.event_name == 'push'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add report/build/MSc_group_i.pdf
+          git diff --cached --quiet || (git commit -m "docs: auto-generated report PDF" && git push)
