@@ -26,10 +26,7 @@ def dump_messages(session):
 
 
 def flag_messages(session, ids):
-    existing = {
-        row[0]
-        for row in session.query(Message.message_id).filter(Message.message_id.in_(ids)).all()
-    }
+    existing = {row[0] for row in session.query(Message.message_id).filter(Message.message_id.in_(ids)).all()}
     missing = [i for i in ids if i not in existing]
 
     if existing:
