@@ -2,7 +2,7 @@
   "annotations": {
     "list": []
   },
-  "description": "Physical resource health across every droplet in the swarm. Use the $instance variable to focus on one node. Top row is a per-droplet KPI strip; below are CPU, memory, disk, network and load-average breakdowns.",
+  "description": "Physical resource health across every droplet in the swarm. Use the $instance variable to focus on one node. Top row is a per-droplet KPI strip; below are CPU, memory and disk breakdowns.",
   "editable": true,
   "graphTooltip": 1,
   "id": null,
@@ -347,7 +347,7 @@
       },
       "gridPos": {
         "h": 9,
-        "w": 12,
+        "w": 24,
         "x": 0,
         "y": 17
       },
@@ -382,33 +382,48 @@
       "type": "timeseries"
     },
     {
+      "type": "row",
+      "id": 103,
+      "title": "Disk",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 26
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
       "datasource": {
         "type": "prometheus",
         "uid": "Prometheus"
       },
-      "description": "Used vs total memory in bytes \u2014 gives an absolute view to back the percentage panel.",
+      "description": "Root filesystem usage percentage per droplet over time.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
-            "axisLabel": "bytes",
+            "axisLabel": "%",
             "drawStyle": "line",
-            "fillOpacity": 10,
+            "fillOpacity": 15,
             "lineWidth": 2,
             "showPoints": "never"
           },
-          "unit": "bytes"
+          "unit": "percent",
+          "max": 100,
+          "min": 0
         }
       },
       "gridPos": {
         "h": 9,
         "w": 12,
-        "x": 12,
-        "y": 17
+        "x": 0,
+        "y": 27
       },
-      "id": 7,
+      "id": 8,
       "options": {
         "legend": {
           "calcs": [
@@ -430,100 +445,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "node_memory_MemTotal_bytes{instance=~\"$instance\"}",
-          "legendFormat": "total {{instance}}",
+          "expr": "100 * (1 - (node_filesystem_avail_bytes{mountpoint=\"/\",instance=~\"$instance\"} / node_filesystem_size_bytes{mountpoint=\"/\",instance=~\"$instance\"}))",
+          "legendFormat": "{{instance}}",
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "node_memory_MemTotal_bytes{instance=~\"$instance\"} - node_memory_MemFree_bytes{instance=~\"$instance\"} - node_memory_Cached_bytes{instance=~\"$instance\"} - node_memory_Buffers_bytes{instance=~\"$instance\"}",
-          "legendFormat": "used {{instance}}",
-          "refId": "B"
         }
       ],
-      "title": "Memory total vs used (bytes)",
-      "type": "timeseries"
-    },
-    {
-      "type": "row",
-      "id": 103,
-      "title": "Disk",
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 26
-      },
-      "collapsed": false,
-      "panels": []
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "Prometheus"
-      },
-      "description": "Available bytes on the root filesystem.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "bytes",
-            "drawStyle": "line",
-            "fillOpacity": 15,
-            "lineWidth": 2,
-            "showPoints": "never"
-          },
-          "unit": "bytes"
-        }
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 0,
-        "y": 27
-      },
-      "id": 8,
-      "options": {
-        "legend": {
-          "calcs": [
-            "min",
-            "last"
-          ],
-          "displayMode": "table",
-          "placement": "right",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "asc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "node_filesystem_avail_bytes{mountpoint=\"/\",instance=~\"$instance\"}",
-          "legendFormat": "avail {{instance}}",
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "node_filesystem_size_bytes{mountpoint=\"/\",instance=~\"$instance\"} - node_filesystem_avail_bytes{mountpoint=\"/\",instance=~\"$instance\"}",
-          "legendFormat": "used {{instance}}",
-          "refId": "B"
-        }
-      ],
-      "title": "Disk space (/)",
+      "title": "Disk usage % by droplet",
       "type": "timeseries"
     },
     {
@@ -584,259 +511,6 @@
       ],
       "title": "Disk I/O utilisation",
       "type": "timeseries"
-    },
-    {
-      "type": "row",
-      "id": 104,
-      "title": "Network",
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 36
-      },
-      "collapsed": false,
-      "panels": []
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "Prometheus"
-      },
-      "description": "Network throughput in bytes/s per droplet, excluding loopback and veth (container side) devices.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "B/s",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 2,
-            "showPoints": "never"
-          },
-          "unit": "Bps"
-        }
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 0,
-        "y": 37
-      },
-      "id": 10,
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean",
-            "max"
-          ],
-          "displayMode": "table",
-          "placement": "right",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "rate(node_network_receive_bytes_total{device!~\"lo|veth.*\",instance=~\"$instance\"}[2m])",
-          "legendFormat": "RX {{instance}} {{device}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Network RX",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "Prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "B/s",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 2,
-            "showPoints": "never"
-          },
-          "unit": "Bps"
-        }
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 37
-      },
-      "id": 11,
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean",
-            "max"
-          ],
-          "displayMode": "table",
-          "placement": "right",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "rate(node_network_transmit_bytes_total{device!~\"lo|veth.*\",instance=~\"$instance\"}[2m])",
-          "legendFormat": "TX {{instance}} {{device}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Network TX",
-      "type": "timeseries"
-    },
-    {
-      "type": "row",
-      "id": 105,
-      "title": "Per-container resources (cAdvisor)",
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 46
-      },
-      "collapsed": false,
-      "panels": []
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "Prometheus"
-      },
-      "description": "CPU seconds consumed per container per second. Useful to see which container is starving the node.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "cores",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 2,
-            "showPoints": "never"
-          },
-          "unit": "short"
-        }
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 0,
-        "y": 47
-      },
-      "id": 12,
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean",
-            "max"
-          ],
-          "displayMode": "table",
-          "placement": "right",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "sum by (name) (rate(container_cpu_usage_seconds_total{name!=\"\",instance=~\"$instance\"}[1m]))",
-          "legendFormat": "{{name}}",
-          "refId": "A"
-        }
-      ],
-      "title": "CPU per container",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "Prometheus"
-      },
-      "description": "Resident memory per container. Spikes here usually precede OOM kills.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "bytes",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 2,
-            "showPoints": "never"
-          },
-          "unit": "bytes"
-        }
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 47
-      },
-      "id": 13,
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean",
-            "max"
-          ],
-          "displayMode": "table",
-          "placement": "right",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "sum by (name) (container_memory_working_set_bytes{name!=\"\",instance=~\"$instance\"})",
-          "legendFormat": "{{name}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Memory per container (working set)",
-      "type": "timeseries"
     }
   ],
   "refresh": "10s",
@@ -879,7 +553,7 @@
     "to": "now"
   },
   "timezone": "browser",
-  "title": "MiniTwit \u2014 Infrastructure",
+  "title": "MiniTwit - Infrastructure",
   "uid": "minitwit-infrastructure",
   "version": 1
 }

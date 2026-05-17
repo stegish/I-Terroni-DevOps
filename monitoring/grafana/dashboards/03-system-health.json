@@ -251,7 +251,7 @@
   "templating": { "list": [] },
   "time": { "from": "now-1h", "to": "now" },
   "timezone": "browser",
-  "title": "MiniTwit — System Health",
+  "title": "MiniTwit - System Health",
   "uid": "minitwit-system-health",
   "version": 1
 }
