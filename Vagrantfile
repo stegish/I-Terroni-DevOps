@@ -8,7 +8,7 @@ Vagrant.configure("2") do |config|
 
   #use the DigitalOcean provider
   config.vm.provider :digital_ocean do |provider, override|
-    #read secrets from environment variables!
+    #read secrets from environment variables
     provider.token = ENV['DO_TOKEN']
     provider.ssh_key_name = ENV['DO_SSH_KEY_NAME']
     
@@ -48,7 +48,6 @@ Vagrant.configure("2") do |config|
     # NOTE: Docker bypasses ufw by writing to iptables directly. The ufw rules
     # above only protect the host's own listening sockets. Container ports are
     # additionally restricted by binding them to 127.0.0.1 in docker-compose.yml.
-    # See SECURITY.md §2.A for the rationale.
 
     echo "Enabling unattended-upgrades for OS security patches..."
     apt-get install -y unattended-upgrades

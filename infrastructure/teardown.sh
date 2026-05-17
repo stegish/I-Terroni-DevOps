@@ -1,11 +1,4 @@
 #!/usr/bin/env bash
-# Fully shuts down the infrastructure (slide 33: "Can you also stop your
-# systems so you don't pay..."). The state file is preserved: the next
-# `bring-up.sh` rebuilds the exact same topology.
-#
-# What is NOT destroyed:
-#   - the DO Managed MySQL database (external, created manually in the DO UI)
-#   - any DO Spaces volume used for remote state
 
 set -euo pipefail
 

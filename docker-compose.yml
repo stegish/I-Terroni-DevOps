@@ -1,27 +1,31 @@
-# No top-level `version:` key — that pins us to the legacy v3.x schema.
-# We want the modern Compose Specification, which is selected by default
-# when `version:` is absent.
+# Port-publishing strategy:
 
-# Port-publishing strategy (see SECURITY.md §2.A):
-#
-#   - Public services (nginx :80, :443) use ingress mode → reachable on the
-#     manager droplet's public IP.
-#   - Admin/observability services (Prometheus, Grafana, Loki) use long-form
-#     `mode: host`. Originally we also set `host_ip: 127.0.0.1` to bind only
-#     to loopback, but the docker stack-deploy parser on the current
-#     droplet's engine rejects that property. Until the droplet is on Docker
-#     >= 24.0.x (which the new Terraform-provisioned droplets are), these
-#     services bind to 0.0.0.0:{3000,9090,3100} on the host. They're
-#     protected by:
-#         (a) `mode: host` bypasses Swarm ingress, so iptables-DOCKER doesn't
-#             punch through — ufw rules on the host actually apply.
-#         (b) the DigitalOcean cloud firewall declared in
-#             infrastructure/firewall.tf rejects these ports at the cloud
-#             edge once the cluster is Terraform-managed.
-#     Reach them via SSH tunnel: `ssh -L 3000:127.0.0.1:3000 root@<droplet>`.
-#   - minitwit, node-exporter, promtail have NO host port — they're reached
-#     via Swarm overlay DNS (tasks.<service>:<port>), which is what nginx and
-#     Prometheus already do.
+# Public services (nginx :80, :443)
+# - exposed via Swarm ingress
+# - reachable from the manager public IP
+
+# Admin / observability (Prometheus, Grafana, Loki)
+# - run in host mode (no Swarm routing)
+# - we tried binding to 127.0.0.1 but docker stack deploy doesn't support it here
+# - so they end up on 0.0.0.0 for now
+
+# Why this is still ok:
+
+# - host mode bypasses Swarm ingress
+#   so Docker doesn't auto-expose them like normal services
+#   UFW rules on the host still work
+
+# - DigitalOcean firewall blocks the ports anyway
+#   nothing is reachable from outside
+
+# Access:
+# - only via SSH tunnel, e.g.
+#   ssh -L 3000:127.0.0.1:3000 root@<droplet>
+
+# Internal services (minitwit, node-exporter, promtail)
+# - no exposed ports
+# - only reachable inside Swarm network
+# - accessed via tasks.<service>:<port>
 
 networks:
   minitwit_net:
@@ -169,7 +173,7 @@ services:
       - ./monitoring/grafana/dashboards/:/var/lib/grafana/dashboards/
       - grafana_data:/var/lib/grafana
     environment:
-      # Pull the admin password from the host environment instead of hard-coding it.
+      # Pull the admin password from the host environment.
       # Production must set GF_SECURITY_ADMIN_PASSWORD in .env.
       - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:?GF_SECURITY_ADMIN_PASSWORD must be set in .env}
       # WAL mode = durable writes even if the container is killed mid-transaction.
@@ -234,7 +238,6 @@ services:
   node-exporter:
     image: prom/node-exporter:v1.8.2
     # No host port — Prometheus scrapes us via overlay DNS
-    # (`tasks.node-exporter:9100`).
     # Mount the host filesystem at /host so collector.filesystem sees the
     # real root fs of the droplet instead of the container's slim image
     # (otherwise node_filesystem_* only reports docker-injected bind mounts).

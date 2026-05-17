@@ -65,9 +65,6 @@ def add_message(http_session, text):
     return r
 
 
-# testing functions
-# every time that we tested, we changed the previous username with a new one because of the register method
-
 
 def test_register():
     """Make sure registering works"""

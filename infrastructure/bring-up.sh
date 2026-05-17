@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# Rebuild the whole infra + deploy the app. Designed for the pre-exam flow:
-# after a full teardown.sh, a single command takes us back online.
-#
+
 # Sequence:
 #   1. terraform apply  -> 3 droplets + swarm + firewall
 #   2. extract the manager IP from Terraform outputs
@@ -33,7 +31,6 @@ MANAGER_IP=$(terraform output -raw manager_ip)
 SSH_KEY=$(terraform output -raw ssh_manager | sed -n 's/.*-i \([^ ]*\).*/\1/p')
 
 echo "==> 3/4 sync repo to the manager ($MANAGER_IP)"
-# shellcheck disable=SC2086
 scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
   -r ../docker-compose.yml ../deploy.sh ../monitoring ../logging ../nginx ../scripts "$ENV_FILE" \
   "root@${MANAGER_IP}:/root/"

@@ -1,8 +1,7 @@
-# DigitalOcean cloud firewall — applied at the platform edge, before
-# packets ever reach the droplet. Belt-and-braces with the per-host ufw
-# rules in main.tf, and the only thing that reliably blocks Docker's
-# iptables bypass for ports we never want exposed (Prometheus, Grafana,
-# Loki — see SECURITY.md §2.A and the lecture's ElasticSearch ransom story).
+# DigitalOcean cloud firewall (edge level, before traffic reaches the droplet).
+# Used together with per-host UFW rules in main.tf.
+# Helps prevent exposure of internal services (Prometheus, Grafana, Loki),
+# even in cases where Docker bypasses host firewall rules via iptables.
 
 resource "digitalocean_firewall" "minitwit" {
   name = "minitwit-swarm"
