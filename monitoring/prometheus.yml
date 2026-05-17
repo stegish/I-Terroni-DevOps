@@ -5,7 +5,7 @@ global:
 scrape_configs:
   # Scrape every minitwit replica.
   # `tasks.<service>` is a Swarm-internal DNS name that returns the IP of every running task,
-  # unlike `<service>` which only returns one (round-robin) IP per query.
+  # unlike `<service>` which only returns one IP per query.
   - job_name: 'minitwit_app'
     dns_sd_configs:
       - names: ['tasks.minitwit']

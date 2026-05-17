@@ -68,7 +68,7 @@ def gravatar_url(email, size=80):
     (semgrep, bandit, Codacy) don't flag this as a weak signature.
     """
     email_bytes = email.strip().lower().encode("utf-8")
-    email_hash = md5(email_bytes, usedforsecurity=False).hexdigest()  # nosec B324  # nosemgrep
+    email_hash = md5(email_bytes, usedforsecurity=False).hexdigest() # nosec B324  # nosemgrep
     return "http://www.gravatar.com/avatar/%s?d=identicon&s=%d" % (email_hash, size)
 
 

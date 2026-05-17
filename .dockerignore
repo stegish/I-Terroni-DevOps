@@ -1,4 +1,4 @@
-# Secrets — must never end up in any image.
+# Secrets (must never end up in any image.)
 .env
 .env.*
 *.pem
