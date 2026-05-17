@@ -69,13 +69,8 @@ services:
     image: michaelfant/minitwitimage:latest
     env_file:
       - .env
-    # Published on :8080 via Swarm ingress (load-balanced across replicas).
-    # Nginx still reaches internally via overlay DNS (`tasks.minitwit:5000`).
-    ports:
-      - target: 5000
-        published: 8080
-        protocol: tcp
-        mode: ingress
+    # No host port — nginx reaches us over the overlay network
+    # via Swarm DNS (`tasks.minitwit:5000`).
     networks:
       - minitwit_net
     healthcheck:

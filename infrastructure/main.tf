@@ -56,8 +56,6 @@ resource "digitalocean_droplet" "manager" {
       "ufw allow 22/tcp",
       "ufw allow 80/tcp",
       "ufw allow 443/tcp",
-      # minitwit app published directly via Swarm ingress (bypasses nginx).
-      "ufw allow 8080/tcp",
       # Swarm control-plane ports (manager <-> nodes)
       "ufw allow 2377/tcp",
       "ufw allow 7946",
@@ -125,12 +123,9 @@ resource "digitalocean_droplet" "worker" {
       "ufw default deny incoming",
       "ufw default allow outgoing",
       "ufw allow 22/tcp",
-      # minitwit is published with mode: ingress, so the routing mesh opens
-      # :8080 on every node — workers need it through ufw too, even though
-      # the replicas all run here.
-      "ufw allow 8080/tcp",
-      # Swarm overlay/data ports. Workers don't need 80/443 — those are only
-      # published by nginx on the manager.
+      # Swarm overlay/data ports (workers don't need 80/443 — ingress mode
+      # routes external traffic through any node, but only nginx on the
+      # manager publishes them; locking workers down to 22 + swarm).
       "ufw allow 2377/tcp",
       "ufw allow 7946",
       "ufw allow 4789/udp",

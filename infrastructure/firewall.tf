@@ -31,13 +31,6 @@ resource "digitalocean_firewall" "minitwit" {
     source_addresses = ["0.0.0.0/0", "::/0"]
   }
 
-  # Direct access to the minitwit app via Swarm ingress (bypasses nginx).
-  inbound_rule {
-    protocol         = "tcp"
-    port_range       = "8080"
-    source_addresses = ["0.0.0.0/0", "::/0"]
-  }
-
   # --- Inbound between cluster members only (swarm overlay) ---
   # Restricted by tag so a stray droplet on the same VPC can't join.
   inbound_rule {
