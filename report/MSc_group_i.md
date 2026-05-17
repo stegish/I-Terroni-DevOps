@@ -59,7 +59,7 @@ Deployment safety is enforced through a mandatory healthcheck: each replica runs
 | Security scanning | Semgrep (SAST), Trivy (image CVEs), SonarCloud, Codacy |
 | Browser E2E tests | Selenium (standalone-chrome) |
 
-![Dependency graph: logical view](./images/dependency-graph.png)
+![Dependency graph: logical view](./images/dependency-graph.svg)
 
 Figure 1.2.1: Dependency graph: logical view
 
@@ -90,6 +90,10 @@ static-analysis  →  tests  →  security-scan  →  build-and-deploy
 2. **`tests`**: builds the production image locally, spins up MySQL 8 + Selenium Chrome on a Docker network, runs the schema init (mirroring `deploy.sh`), and then executes the three test suites: integration (`minitwit_tests_refactor.py`), simulator API (`minitwit_sim_api_test.py`) and Selenium (`test_itu_minitwit_ui.py`).
 3. **`security-scan`**: **trivy** scans the built image for OS-package and Python-dependency CVEs and fails on HIGH/CRITICAL. Results are also uploaded as SARIF to the GitHub Security tab.
 4. **`build-and-deploy`**: only runs on `push` to `main` (not on PR). Pushes the two production images to Docker Hub and SSH into the manager droplet to run `deploy.sh`, which uses `docker stack deploy` with a rolling update.
+
+![CI/CD pipeline: sequential gates](./images/cicd_pipeline.svg)
+
+Figure 2.1.1: CI/CD pipeline: sequential gates
 
 **Infrastructure** is provisioned  with **Terraform** ([`infrastructure/main.tf`](../infrastructure/main.tf)). Remote-exec provisioners automate `docker swarm init` on the manager and `docker swarm join` on workers using a join token retrieved via SSH.
 
@@ -142,31 +146,27 @@ If we need more capacity, we just update the `worker_count` variable in Terrafor
 
 ## 3. Reflection Perspective
 
-### 3.1 Evolution and refactoring
+### 3.1 Database dataloss during first migration from SQLlite to MySql
 
-The largest single refactor was **introducing SQLAlchemy** ([`db.py`](../db.py), [`models.py`](../models.py), and the new [`minitwit_refactor.py`](../minitwit_refactor.py)). The original code interleaved raw `SELECT * FROM user WHERE id=?` with HTTP handler logic; changing database engine would have meant rewriting every endpoint. We split it into three layers — a thin connection module (`db.py`), declarative ORM models (`models.py`) and pure-business-logic handlers — which then made the **SQLite → MySQL 8 migration** a no-op at the code level: only the `DATABASE_URL` connection string changed. SQLite is still used in CI for speed; SQLAlchemy abstracts the engine so the same tests run in both places.
+During the migration from SQLite to the DigitalOcean MySQL database, our biggest issue was unexpected data loss: the new database was mostly empty, while the simulator still expected the historical old users and follow relationships to exist. This caused steadily increasing errors in the tweet, follow, and unfollow endpoints, even though registration still worked. After checking Docker, API behavior, and Grafana metrics, we found that the real problem was not the code or infrastructure performance, but missing production data.
 
-A second major evolution was **splitting one monolithic Dockerfile into three** (`Dockerfile-minitwit`, `Dockerfile-flagtool`, `Dockerfile-minitwit-tests`). Each image now has a different lifecycle: production, admin utility, and CI-only. The test image carries Selenium, `pytest` and curl; none of that reaches production, which reduced the deployed image and removed several false-positive CVEs reported by Trivy.
+We solved the issue by writing a custom SQLAlchemy migration script that connected to both the old SQLite database and the new MySQL database, then restored the critical User and Follower tables. Around 98% of the data was recovered, although some parts were still missing. This still caused a slow error increase but we managed to scale down the issue drastically. The main lessons learned are that database migrations must include proper backups, validation checks, and rollback plans. At the end we learned that nothing is as important as data already in production.
 
-The third evolution was **infrastructure**: we moved from `vagrant up --provider=digital_ocean` (good enough for a single VM) to a **Terraform-managed swarm** of three droplets when we hit the limits of one box. The rationale, trade-offs, and the `remote-exec` "leaky abstraction" we accepted are written up in `docs/infrastructure-as-code.md`.
+### 3.2 Slow public timeline query and user-related pages
 
-### 3.2 Operation
+Our second major issue was the extremely slow public timeline and user-related pages, where loading times sometimes reached 30 seconds to 1 minute. At first, we thought the problem was caused by high memory usage from the new Docker Swarm setup, especially because we started the swarm on 1 droplet which we scaled up horizontally. After investigation into the sql and database setup we found that queries took up all memory and required crazy amount of resources that would be needed for other services. The first fix was to introduce database indexes, which improved the public timeline queries, but it did not fully solve login and other user-related operations. The deeper problem was the way our queries were formatted, especially queries using OR, which forced inefficient database lookups and created unnecessary memory pressure. Also have to note here the minimalist droplet database hardware setup is not designed for 4 million messages and 100k user setup. 
 
-The biggest operational lesson was a **production outage** that taught us *DDL is a deploy-time concern, not a runtime concern*. The full timeline is in `Incident Report_ Simulator API Errors Post-Database Migration-1.pdf`. Summary: `db.py` originally called `init_db()` at module import, which was fine for one process and one SQLite file. After the move to MySQL with **3 replicas × 3 gunicorn workers = up to 9 processes** all racing through `Base.metadata.create_all()` during a `start-first` rolling deploy, MySQL started raising error **1684** (*"table definition is being modified by concurrent DDL"*). Replicas crashed, Swarm flapped, the simulator hammered the API and we saw waves of 500s. The fix was to **lift schema init out of the app boot path** into a one-shot step in `deploy.sh` (and mirror it in the CI test job), exactly the pattern Alembic/Flyway/Liquibase already follow. The rule we wrote down for ourselves: *the application image must never run migrations on startup.*
+We solved the issue by changing the query structure instead of only relying on indexes. In particular, we removed the expensive OR statement and first created the relevant list of users before running the final query. This made the database access more predictable and reduced the load on the droplets. The main lesson learned is that performance problems are not always fixed by scaling infrastructure or adding indexes; query design and data access patterns are just as important. We learned that for future we need to monitor slow endpoints, inspect actual database queries, and treat performance refactoring as part of normal system maintenance rather than only reacting when pages become unusable.
 
-A second operational lesson came from the observability stack itself. The first iteration bound Grafana/Prometheus/Loki to `0.0.0.0` with `mode: host`, which under Docker's iptables rewrite made them reachable from the public internet despite `ufw` rules. The "Loki / Elasticsearch-style ransom" risk (`SECURITY.md` §R16) was real until we added the DigitalOcean cloud firewall at the cloud edge as a second layer.
+### 3.3 Loki timeout error under memory pressure
 
-### 3.3 Maintenance
+Another major issue we faced was with logging in the observability stack, specifically Loki under memory pressure. Promtail on the manager node started failing with context deadline exceeded when trying to push logs to the Loki API. The root cause was that the Loki ingester kept log chunks in memory for too long. Both chunk_idle_period and max_chunk_age were set to 1 hour. With Loki limited to only 280 MB of memory, this caused heavy garbage-collection pauses, which made Promtail time out and temporarily broke reliable log collection.
 
-Maintenance has been kept tractable by **making everything checkable locally**: `make lint`, `make typecheck` and `make check` mirror the CI quality gate, so a developer can know in seconds whether a PR will land. We also pinned every third-party GitHub Action to a 40-character SHA after Codacy flagged the mutable `@master` / `@v4` refs. The side-effect — Codacy's secret-scanner pattern-matching the SHA as an API key — was handled by excluding `.github/workflows/**` from Codacy, with the trade-off documented in `README.md` §11.
+We solved it by tuning Loki’s memory behavior. Both chunks were reduced from 1 hour to 10 minutes in monitoring/loki-config.yaml, and Loki’s memory limit was increased from 280 MB to 420 MB in docker-compose.yml. The main lesson learned is that monitoring and logging services also need proper resource planning.
 
 ### 3.4 "DevOps" style of work
 
-Compared with previous coursework, three things felt categorically different:
-
-- **Everything is in the repository.** Infrastructure (Terraform), deployment (`deploy.sh`), monitoring (Grafana JSON dashboards), security posture (`SECURITY.md`), even the linter config — all of it is versioned. No "ask the person who last deployed it." The merge of `develop` into `main` is the deploy.
-- **Failures push policy back into the pipeline.** When the MySQL DDL race bit us we did not add a runbook ("if you see error 1684, restart the service"); we deleted the failure mode by moving schema init into the pipeline. Same with security: Semgrep + Trivy + SonarCloud + Codacy mean a regression is a red PR check, not a meeting.
-- **Pair / trunk-based flow.** Most work landed via short-lived `develop` → `main` PRs with the bot-driven quality gates as the reviewers of first resort. The Git history shows ~160 commits across five authors with frequent merges, which would have been impossible without the pipeline catching obvious regressions for us.
+The DevOps style of our work was different from previous development projects because we did not only focus on writing application features. We also had to think about deployment, infrastructure, monitoring, logging, performance, and recovery as part of the same development process. Instead of manually running the app and checking if it worked locally, we used Docker, Docker Swarm, GitHub Actions, Prometheus, Grafana, Loki, and DigitalOcean to build a production-like system. The hardest part was managing all these different components which we havent used before to make the separate work together seemlessly. The biggest issue definitely we had with the database as seen in the [3.1](#31-database-dataloss-during-first-migration-from-sqllit-to-mysql) and [3.2](#32-slow-public-timeline-query-and-user-related-pages) paragraphs. Since we thought for so long that the application and the droplets were causing issues. This highlights how important a correct and well put together monitoring/logging system is the hearth of an application.
 
 ---
 
