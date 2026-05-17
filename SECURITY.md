@@ -15,7 +15,7 @@ This document is the security deliverable for the I-Terroni MiniTwit project. It
 | A1 | MiniTwit web/API application (Pyramid + gunicorn) | 3 replicas across the 2 worker droplets, image `michaelfant/minitwitimage:latest` | Public-facing service. Compromise = service downtime, defacement, or pivot point into the rest of the stack. |
 | A2 | MySQL 8 managed database (DigitalOcean) | Outside the swarm, reached via `DATABASE_URL` | Holds all user data: usernames, e-mails, password hashes, messages, follow graph. The crown jewels. |
 | A3 | Observability stack — Prometheus, Grafana, Loki, Promtail | Manager droplet only | Holds operational telemetry (metrics, logs). Logs may contain user input echoes. Grafana is a known credential-leak vector. |
-| A4 | Docker Hub images `michaelfant/minitwitimage`, `michaelfant/flagtoolimage` | Public registry | If an attacker gets push access, every redeploy ships their code into production. |
+| A4 | Docker Hub image `michaelfant/minitwitimage` | Public registry | If an attacker gets push access, every redeploy ships their code into production. |
 | A5 | DigitalOcean droplets (2 workers + 1 manager) | DO `fra1` region | The hosts themselves. Root on a host = game over for everything running on it. |
 | A6 | CI/CD pipeline (GitHub Actions) | GitHub | Has access to: `DOCKER_PASSWORD`, `SSH_KEY`, `DROPLET_IP`, `DATABASE_URL`, `SONAR_TOKEN`, `CODACY_PROJECT_TOKEN`. Compromise = full production compromise. |
 | A7 | Source repository on GitHub | GitHub | Code, infrastructure-as-code, workflow definitions. Anyone with write access can ship a backdoor. |
@@ -153,7 +153,8 @@ Files added:
 | --- | --- | --- |
 | `Dockerfile-minitwit` | `python:3.9-slim`, runs as root | `python:3.12-slim`, dedicated `appuser` (UID 10001), `USER appuser` before `CMD` |
 | `Dockerfile-minitwit-tests` | `python:3.9-slim`, runs as root | `python:3.12-slim`, `appuser`, `USER appuser` |
-| `Dockerfile-flagtool` | `ubuntu:24.04`, runs as root | `ubuntu:24.04`, dedicated `appuser`, `USER appuser` |
+
+> The previous `Dockerfile-flagtool` (Ubuntu base + `gcc` + `libsqlite3` to build the legacy C admin tool) was hardened as part of this work, then removed entirely when the flag tool was rewritten as a Python script (`flag_tool.py`) that ships inside the main image. Removing it eliminated one base-image attack surface and one Docker Hub artifact (`michaelfant/flagtoolimage`).
 
 A `.dockerignore` was also added to keep `.env`, `.git/`, the SQLite test DB, and the `out/` folder out of every image — both for security (no secret leaks) and image size.
 

@@ -104,7 +104,7 @@ If all tests pass, the application API is correctly tracking the latest variable
 We have transitioned from manual, local builds on the server to a fully automated CI/CD pipeline using **GitHub Actions** and **Docker Hub**. Vagrant serves as our Infrastructure as Code (IaC) tool for **initial provisioning** of the DigitalOcean Droplet. It automates VM creation (`vagrant up --provider=digital_ocean`), Docker installation, and SSH setup via API calls. Post-setup, GitHub Actions handles daily deploys directly via SSH (`deploy.sh`)
 
 #### Architecture Updates
-* **Decoupled Dockerfiles**: We split the original monolithic `Dockerfile` into three distinct images: `Dockerfile-minitwit`, `Dockerfile-flagtool`, and `Dockerfile-minitwit-tests`. Each image has a different purpose and lifecycle: `Dockerfile-minitwit` is the production image deployed to the server; `Dockerfile-minitwit-tests` runs exclusively in the CI pipeline and never reaches production, keeping test dependencies and debug code out of the final image; `Dockerfile-flagtool` is an administration utility used independently. This separation reduces image size and allows the CI pipeline to build and test in parallel, deploying only what is strictly necessary.
+* **Decoupled Dockerfiles**: We split the original monolithic `Dockerfile` into two distinct images: `Dockerfile-minitwit` and `Dockerfile-minitwit-tests`. `Dockerfile-minitwit` is the production image deployed to the server; `Dockerfile-minitwit-tests` runs exclusively in the CI pipeline and never reaches production, keeping test dependencies and debug code out of the final image. The administrator flag tool (originally a separate C+SQLite binary in its own image) is now a Python script (`flag_tool.py`) shipped inside the production image and invoked via `docker run --rm $IMAGE python flag_tool.py …`; this removed an entire third image and its publishing step from the CI pipeline.
 
 #### Why GitHub Actions?
 Since our codebase is already hosted on GitHub and we deploy to DigitalOcean, GitHub Actions was the natural choice for our CD pipeline. It provides several key benefits for our workflow:
@@ -300,5 +300,35 @@ uses: codacy/codacy-analysis-cli-action@562ee3e92b8e92df8b67e0a5ff8aa8e261919c08
 First-party actions from official orgs (`actions/`, `docker/`, `github/`, `hadolint/`) are kept on version tags for readability, since their compromise model is different (they're maintained by GitHub or vendor security teams, not individual contributors).
 
 **Side effect — Codacy false positive.** A pinned commit SHA is a 40-character hex string, which Codacy's secret scanner pattern-matches as an API key (e.g. *"SonarQube Docs API Key detected"*). To suppress these false positives we excluded `.github/workflows/**` from Codacy in `.codacy.yml`. This is a safe trade-off: none of our enabled Codacy engines (`ruff`, `pylint`, `bandit`, `hadolint`, `shellcheck`) actually inspect workflow YAML, so the only thing we lose is the secret scanner — which was producing nothing but false positives on our SHA pins anyway. Real secret-leak prevention for workflows is enforced separately by GitHub's own push protection and by the principle of never committing secret values (we only reference them via `${{ secrets.* }}`).
+
+### 12. Observability Stack — Bug Fixes (2026-05-15)
+
+During production operation, four bugs were identified via direct SSH diagnostics on the cluster. All fixes are in commit `6716c2f`.
+
+#### cadvisor — invalid `--disable_metrics` value
+
+`accelerator` was listed in the `--disable_metrics` flag, but it is not a recognised metric name in `gcr.io/cadvisor/cadvisor:v0.49.1`. The valid set is `advtcp,app,cpu,cpuLoad,cpu_topology,cpuset,disk,diskIO,hugetlb,memory,memory_numa,network,oom_event,percpu,perf_event,process,referenced_memory,resctrl,sched,tcp,udp`. An unrecognised value causes cadvisor to print its help text and exit with code 2, which made all 3 global tasks fail immediately after Swarm's `max_attempts` were exhausted (0/3). **Fix:** removed `accelerator` from the flag in `docker-compose.yml`.
+
+#### mysqld-exporter — DATA_SOURCE_NAME ignored in v0.15.1
+
+`prom/mysqld-exporter:v0.15.1` changed the startup flow: the exporter now validates a `.my.cnf` config file first and exits with code 1 if none is found, without falling back to the `DATA_SOURCE_NAME` environment variable as previous versions did. This left the service at 0/1 indefinitely. **Fix:** downgraded to `prom/mysqld-exporter:v0.14.0` which fully supports `DATA_SOURCE_NAME`.
+
+#### promtail — Docker API version mismatch on worker nodes
+
+`grafana/promtail:2.9.4` negotiates Docker API v1.42, but Docker Engine 29.1.3 on the two worker droplets requires a minimum client version of 1.44. Promtail on those nodes logged:
+
+```
+Error response from daemon: client version 1.42 is too old. Minimum supported API version is 1.44
+```
+
+This meant zero container discovery (and therefore zero log collection) on both workers. **Fix:** upgraded to `grafana/promtail:3.0.0`.
+
+#### Loki ingester — push timeout under memory pressure
+
+Promtail on the manager was getting `context deadline exceeded` when posting to `http://loki:3100/loki/api/v1/push`. Root cause: the Loki ingester accumulates chunks in memory for up to `chunk_idle_period` (was `1h`) and `max_chunk_age` (was `1h`). With the 280 MB container memory limit this caused frequent GC pauses long enough for Promtail's HTTP client to time out. **Fix:** reduced both periods to `10m` in `monitoring/loki-config.yaml` and raised the Loki memory limit to 420 MB in `docker-compose.yml`.
+
+#### minitwit — missing healthcheck caused rolling-update downtime
+
+With no Docker healthcheck declared, Swarm considers a container ready the instant the process starts. Under `order: start-first` the old task is stopped immediately after the new container's process starts — before Flask has had time to establish the database connection and begin serving HTTP. This produced brief windows (visible in Grafana) of fewer than 3 healthy instances during every deploy. **Fix:** added a Python `urllib` healthcheck with a 20-second `start_period`, and made `parallelism: 1` and `failure_action: rollback` explicit in `update_config`.
 
 > **AI Disclosure:** Portions of this codebase were generated or optimized using LLMs. All AI-generated logic has been reviewed and tested for accuracy and security.

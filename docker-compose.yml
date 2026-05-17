@@ -100,26 +100,6 @@ services:
       restart_policy:
         condition: any
 
-  flagtool:
-    image: michaelfant/flagtoolimage:latest
-    networks:
-      - minitwit_net
-    deploy:
-      replicas: 1
-      placement:
-        constraints:
-          - node.role == worker
-      resources:
-        limits:
-          memory: 100M
-        reservations:
-          memory: 50M
-      restart_policy:
-        condition: on-failure
-        delay: 10s
-        max_attempts: 5
-        window: 120s
-
   prometheus:
     image: prom/prometheus:v2.55.1
     # Cap retention so the TSDB never blows the manager disk.

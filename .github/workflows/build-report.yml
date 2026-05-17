@@ -1,0 +1,40 @@
+name: Build Report PDF
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-report:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Pandoc and LaTeX
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            pandoc \
+            texlive-xetex \
+            texlive-latex-recommended \
+            texlive-latex-extra \
+            fonts-dejavu
+
+      - name: Build report PDF
+        run: |
+          chmod +x scripts/build_report.sh
+          ./scripts/build_report.sh
+
+      - name: Verify required PDF name
+        run: |
+          test -f report/build/MSc_group_i.pdf
+
+      - name: Upload report PDF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MSc_group_i_report
+          path: report/build/MSc_group_i.pdf
