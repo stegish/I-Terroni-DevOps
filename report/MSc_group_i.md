@@ -13,7 +13,7 @@
 | --- | --- |
 | Main repository | <https://github.com/stegish/I-Terroni-DevOps> |
 | Issue tracker | <https://github.com/stegish/I-Terroni-DevOps/issues> |
-| Production application | `http://164.92.231.30/public` (DigitalOcean, fra1) |
+| Production application | `http://164.92.231.30/public` (DigitalOcean) |
 | CI/CD pipelines | [`.github/workflows/continuous-deployment.yml`](../.github/workflows/continuous-deployment.yml), [`.github/workflows/code-quality.yml`](../.github/workflows/code-quality.yml), [`.github/workflows/build-report.yml`](../.github/workflows/build-report.yml) |
 | Container images | `michaelfant/minitwitimage:latest`, `michaelfant/flagtoolimage:latest` on Docker Hub |
 | Infrastructure as Code | [`infrastructure/`](../infrastructure/) [`docs/infrastructure-as-code.md`](../docs/infrastructure-as-code.md) |
@@ -29,25 +29,14 @@
 
 *ITU-MiniTwit* is a Twitter-like micro-blogging service that we rewrote from the given Flask + raw-SQL code base into a **Pyramid** application with  **SQLAlchemy ORM** data layer. The web framework choice is documented in [`README.md`](../README.md): We chose Pyramid instead of Bottle or Flask because it gave us a clearer structure for the application. Bottle would have required more manual setup for things like templating, while Flask often depends on global application state. Pyramid uses an explicit request object, which made it easier for us to attach things like the database session to `request.db`. This also made the code easier to test, since individual request handlers could be tested without needing to rely on a full application context.
 
-In production the system is a **3-node Docker Swarm** running on DigitalOcean droplets in the `fra1` region:
+In production the system is a **3-node Docker Swarm** running on DigitalOcean droplets:
 
-- **1 manager** (`s-2vcpu-2gb`) — hosts the observability stack (Prometheus, Grafana, Loki) and the nginx ingress. It is deliberately kept off the application path so the app and the telemetry never compete for RAM.
-- **2 workers** (`s-1vcpu-1gb` each) — run **3 `minitwit` replicas** (Pyramid + 3 gunicorn workers each) plus the `flagtool` admin container.
-- Per-node agents (`node-exporter`, `cadvisor`, `promtail`) run in Swarm `mode: global` — exactly one task per droplet.
+- **1 manager** (`s-2vcpu-2gb`): hosts the observability stack (Prometheus, Grafana, Loki) and the nginx ingress. It is deliberately kept off the application path so the app and the telemetry never compete for RAM.
+- **2 workers** (`s-1vcpu-1gb` each): run **3 `minitwit` replicas** (Pyramid + 3 gunicorn workers each) plus the `flagtool` admin container.
+- Per-node agents (`node-exporter`, `cadvisor`, `promtail`): run in Swarm `mode: global` one task per droplet.
 
 The database runs as a separate DigitalOcean Managed MySQL 8 instance outside the Docker Swarm. The application connects to it through the `DATABASE_URL` environment variable, using TLS for the connection. On the manager node, nginx handles HTTPS traffic and forwards requests into the Swarm network to the MiniTwit service through Swarm DNS (`tasks.minitwit:5000`). We also use this DNS-based service discovery for monitoring, so Prometheus can scrape the actual running replicas instead of only reaching one container through a single load-balanced address.
 
-The placement is enforced declaratively in [`docker-compose.yml`](../docker-compose.yml):
-
-```yaml
-minitwit:
-  deploy:
-    replicas: 3
-    placement:
-      constraints: [node.role == worker]
-      max_replicas_per_node: 2     # 2/1 spread instead of 3/0
-    update_config: { order: start-first, delay: 10s }
-```
 
 Deployment safety is enforced through a mandatory healthcheck: each replica runs a Python `urllib` probe every 10 seconds, with a 20-second grace period before Swarm considers the container ready. This prevents the `start-first` rolling strategy from terminating an old replica before the new one is fully initialized and accepting connections. Additionally, services declare varying restart policies: the main application uses `condition: any` (restart on all exits), while observability and utility services use `condition: on-failure` with exponential backoff (delay, max_attempts, window), allowing graceful shutdown and containment of transient failures.
 
@@ -61,25 +50,29 @@ Deployment safety is enforced through a mandatory healthcheck: each replica runs
 | ORM / DB driver | SQLAlchemy + PyMySQL |
 | Database | MySQL 8 (DigitalOcean Managed external instance, TLS connection via `DATABASE_URL` environment variable); SQLite in CI |
 | Frontend | server-rendered Jinja2 templates + static CSS |
-| Observability | Prometheus 2.55 (280M limit), Grafana 11.4 (280M limit), Loki 2.9, Promtail 3.0, `node-exporter` 1.8 (64M limit), cAdvisor 0.49, `mysqld-exporter` 0.14.0, `prometheus-client` (in-app); per-node agents run `mode: global` with resource caps to prevent interference with application workloads |
+| Observability | Prometheus 2.55, Grafana 11.4, Loki 2.9, Promtail 3.0, `node-exporter` 1.8, cAdvisor 0.49, `mysqld-exporter` 0.14.0, `prometheus-client`; per-node agents run `mode: global` with resource caps to prevent interference with application workloads |
 | Reverse proxy / TLS | nginx 1.27-alpine + Let's Encrypt (certbot) |
-| Container orchestration | Docker Engine + Docker Swarm (compose-spec, no legacy `version:`) |
+| Container orchestration | Docker Engine + Docker Swarm (compose-spec) |
 | Infrastructure as Code | **Terraform** (DigitalOcean provider); `Vagrantfile` kept for single-node local experiments only |
 | CI/CD | GitHub Actions; Docker Hub registry |
 | Static analysis | `ruff`, `codespell`, `mypy`, `hadolint`, `shellcheck` |
 | Security scanning | Semgrep (SAST), Trivy (image CVEs), SonarCloud, Codacy |
 | Browser E2E tests | Selenium (standalone-chrome) |
 
+![Dependency graph: logical view](./images/dependency-graph.png)
+
+Figure 1.2.1: Dependency graph: logical view
+
 The full dependency manifest is in [`requirements.txt`](../requirements.txt) and the lint/format/type-check configuration in [`pyproject.toml`](../pyproject.toml). The CI image is built from [`Dockerfile-minitwit-tests`](../Dockerfile-minitwit-tests) and never reaches production, keeping test dependencies and debug code out of `michaelfant/minitwitimage:latest`.
 
-### 1.3 Current state — static analysis & quality assessment
+### 1.3 Current state, static analysis & quality assessment
 
 Quality is continuously measured by two third-party services hooked to every push and PR (workflow: [`.github/workflows/code-quality.yml`](../.github/workflows/code-quality.yml)):
 
-- **SonarCloud** reports Maintainability, Reliability and Security ratings, code smells, duplications, cyclomatic complexity and the SQALE technical-debt index.
+- **SonarCloud** reports maintainability, reliability and security ratings, duplications, cyclomatic complexity and the SQALE technical-debt index.
 - **Codacy** provides an aggregated grade combining `ruff`, `pylint`, `bandit`, `hadolint` and `shellcheck`.
 
-At hand-in time both projects sit at a passing quality gate. Local linting passes cleanly (`make check`), `ruff format --check` is green, and the latest `Trivy` scan of `michaelfant/minitwitimage:latest` reports no HIGH/CRITICAL findings with `ignore-unfixed: true` (the gate that blocks deploy). `mypy` runs non-blocking and surfaces residual type gaps in legacy modules — these are tracked as low-priority tech-debt items rather than fixed reactively.
+At hand-in time both projects sit at a passing quality gate. Local linting passes cleanly (`make check`), `ruff format --check` is green, and the latest `Trivy` scan of `michaelfant/minitwitimage:latest` reports no HIGH/CRITICAL findings with `ignore-unfixed: true` (the gate that blocks deploy). `mypy` runs non-blocking and surfaces residual type gaps in legacy modules.
 
 ---
 
@@ -87,63 +80,63 @@ At hand-in time both projects sit at a passing quality gate. Local linting passe
 
 ### 2.1 CI/CD pipeline
 
-The pipeline lives in [`.github/workflows/continuous-deployment.yml`](../.github/workflows/continuous-deployment.yml) and is structured as four sequential jobs, each a hard gate for the next:
+The pipeline operates in [`.github/workflows/continuous-deployment.yml`](../.github/workflows/continuous-deployment.yml) and is structured as four sequential jobs, each a hard gate for the next:
 
 ```
-static-analysis  →  test  →  security-scan  →  build-and-deploy
+static-analysis  →  tests  →  security-scan  →  build-and-deploy
 ```
 
-1. **`static-analysis`** — `ruff` (lint + format), `codespell`, `mypy` (non-blocking), `hadolint` on the three Dockerfiles, `shellcheck` on `control.sh`/`deploy.sh`, and **Semgrep SAST** with the `p/security-audit`, `p/owasp-top-ten`, `p/python` and `p/dockerfile` rule packs, failing the build on findings of severity ≥ ERROR.
-2. **`test`** — needs `static-analysis`. Builds the production image locally, spins up MySQL 8 + Selenium Chrome on a Docker network, runs the **one-shot schema init** (mirroring `deploy.sh`), and then executes the three test suites: integration (`minitwit_tests_refactor.py`), simulator API (`minitwit_sim_api_test.py`) and Selenium (`test_itu_minitwit_ui.py`).
-3. **`security-scan`** — needs `test`. **Trivy** scans the built image for OS-package and Python-dependency CVEs and fails on HIGH/CRITICAL. Results are also uploaded as SARIF to the GitHub Security tab.
-4. **`build-and-deploy`** — needs `security-scan`. Only runs on `push` to `main` (not on PR). Pushes the two production images to Docker Hub and SSHes into the manager droplet to run `deploy.sh`, which uses `docker stack deploy` with `--with-registry-auth` for a rolling update.
+1. **`static-analysis`**: `ruff` (lint + format), `codespell`, `mypy` (non-blocking), `hadolint` on the three Dockerfiles, `shellcheck` on `control.sh`/`deploy.sh`, and **Semgrep SAST** with the `p/security-audit`, `p/owasp-top-ten`, `p/python` and `p/dockerfile` rule packs, failing the build on findings of severity ≥ ERROR.
+2. **`tests`**: builds the production image locally, spins up MySQL 8 + Selenium Chrome on a Docker network, runs the schema init (mirroring `deploy.sh`), and then executes the three test suites: integration (`minitwit_tests_refactor.py`), simulator API (`minitwit_sim_api_test.py`) and Selenium (`test_itu_minitwit_ui.py`).
+3. **`security-scan`**: **trivy** scans the built image for OS-package and Python-dependency CVEs and fails on HIGH/CRITICAL. Results are also uploaded as SARIF to the GitHub Security tab.
+4. **`build-and-deploy`**: only runs on `push` to `main` (not on PR). Pushes the two production images to Docker Hub and SSH into the manager droplet to run `deploy.sh`, which uses `docker stack deploy` with a rolling update.
 
-**Infrastructure** is provisioned declaratively with **Terraform** ([`infrastructure/main.tf`](../infrastructure/main.tf)). Remote-exec provisioners automate `docker swarm init` on the manager and `docker swarm join` on workers using a join token retrieved via SSH. Guard clauses ensure reapplies are safe on already-provisioned nodes.
+**Infrastructure** is provisioned  with **Terraform** ([`infrastructure/main.tf`](../infrastructure/main.tf)). Remote-exec provisioners automate `docker swarm init` on the manager and `docker swarm join` on workers using a join token retrieved via SSH.
 
-**Infrastructure** is provisioned declaratively with **Terraform** ([`infrastructure/main.tf`](../infrastructure/main.tf)). `bring-up.sh` chains `terraform apply` → `scp` of the deploy artifacts → `bash deploy.sh` on the manager. `teardown.sh` issues `terraform destroy`, which lets us decommission the cluster between the simulator stop and the exam day without paying for idle droplets. The rationale and trade-offs (Terraform vs. Bash + `doctl` vs. Vagrant) are documented in [`docs/infrastructure-as-code.md`](../docs/infrastructure-as-code.md).
 
-The deploy itself ([`deploy.sh`](../deploy.sh)) does three important things beyond `docker stack deploy`: it computes a `sha256` hash of the nginx config and promtail config and injects them as labels / Swarm config names so that a config-only change reliably triggers a rolling restart, and it runs `init_db()` exactly once in a throwaway container.
+
+The deploy itself  does three important things beyond `docker stack deploy`: it computes a `sha256` hash of the nginx config and promtail config and injects them as labels / Swarm config names so that a config-only change reliably triggers a rolling restart, and it runs `init_db()` exactly once in a container.
 
 ### 2.2 Monitoring
 
-We collect metrics with Prometheus and visualise them in six domain-oriented Grafana dashboards (`01-business`, `02-api-http`, `03-system-health`, `04-infrastructure`, `05-database`, `06-logs`), provisioned automatically from [`monitoring/grafana/dashboards/`](../monitoring/grafana/dashboards/).
+We collect metrics with Prometheus and visualise them in six domain oriented Grafana dashboards (`01-business`, `02-api-http`, `03-system-health`, `04-infrastructure`, `05-database`, `06-logs`), provisioned automatically from [`monitoring/grafana/dashboards/`](../monitoring/grafana/dashboards/).
 
 **What we monitor:**
 
-- *Business* — total users, total messages, total follow relations, average followers, registration/message rate, derived from in-app gauges in [`metrics.py`](../metrics.py).
-- *API / HTTP* — request count by `method × route × status`, latency histogram (`minitwit_http_request_duration_seconds` with 11 buckets from 5 ms to 10 s), 4xx/5xx rates, error budget burn.
-- *System health* — droplet CPU, memory, disk and network from `node-exporter`; per-container CPU/RAM/IO from cAdvisor.
-- *Database* — InnoDB metrics, process list, query throughput, table-lock waits from `mysqld-exporter` against the DO managed MySQL.
-- *Logs* — Loki query panels showing 5xx bursts and recent error lines.
+- **Business**: total users, total messages, total follow relations, average followers, registration/message rate, derived from in-app gauges in [`metrics.py`](../metrics.py).
+- **API / HTTP**: request count by `method × route × status`, latency histogram, 4xx/5xx rates, error budget burn.
+- **System health**: droplet CPU, memory, disk and network from `node-exporter`; per container CPU/RAM/IO from cAdvisor.
+- **Infrastructure**: per droplet resource health (CPU, memory, disk, network utilization, load average) with per node breakdowns and thresholds.
+- **Database**: InnoDB metrics, process list, query throughput, table-lock waits from `mysqld-exporter` against the DO managed MySQL.
+- **Logs**: Loki query panels showing 5xx bursts and recent error lines.
 
-Prometheus discovers replicas via Swarm overlay DNS (`tasks.minitwit`, `tasks.node-exporter`, `tasks.cadvisor`) so every replica/agent is scraped, not a single round-robin one (see [`monitoring/prometheus.yml`](../monitoring/prometheus.yml)). TSDB retention is capped at **7 days or 512 MB**, whichever comes first, so the manager droplet never runs out of disk.
+Prometheus discovers replicas via Swarm overlay DNS (`tasks.minitwit`, `tasks.node-exporter`, `tasks.cadvisor`) so every replica/agent is scraped. TSDB retention is capped at **7 days or 512 MB**, whichever comes first, so the manager droplet never runs out of disk.
 
 ### 2.3 Logging
 
-`promtail` runs `mode: global` (one per node), reads `/var/lib/docker/containers`, tags each line with the container name and ships them to Loki on the manager (see [`logging/promtail-config.yml`](../logging/promtail-config.yml)). The application uses `json-log-formatter` so stdout lines are structured JSON, which makes Loki labels actually useful. Retention is 7 days, enforced by the Loki compactor. Grafana's "06-logs" dashboard exposes a small LogQL toolbox for quick incident triage.
+`Promtail` runs and tags each line with the container name and delivers to Loki on the manager (see [`logging/promtail-config.yml`](../logging/promtail-config.yml)). The application uses `json-log-formatter` so stdout lines are structured JSON, which makes Loki labels actually useful. Retention is 7 days, enforced by the Loki compactor. Grafana's "06-logs" dashboard exposes a small LogQL toolbox for quick incident triage.
 
 ### 2.4 Security hardening
 
-A full risk assessment + mitigation plan lives in [`SECURITY.md`](../SECURITY.md). Headline items, all implemented in this branch:
+A full risk assessment + mitigation plan can be found in [`SECURITY.md`](../SECURITY.md). Headline items, all implemented in this branch:
 
-- **Firewall defense-in-depth.** Docker rewrites `iptables` and bypasses `ufw`, so we layered two controls: (a) ufw on the host (allows only 22/80/443) and (b) DigitalOcean cloud firewall declared in [`infrastructure/firewall.tf`](../infrastructure/firewall.tf). Internal ports (Prometheus 9090, Grafana 3000, Loki 3100) are reached over SSH tunnels only.
-- **TLS** via nginx + Let's Encrypt; HTTP redirects to HTTPS; renewal is in cron.
-- **Non-root containers.** All three Dockerfiles add a dedicated `appuser` (UID 10001) and `USER appuser` before `CMD`.
+- **Firewall defense in depth.** Docker rewrites `iptables` and bypasses `ufw`, so we layered two controls: (a) ufw on the host (allows only 22/80/443) and (b) DigitalOcean cloud firewall declared in [`infrastructure/firewall.tf`](../infrastructure/firewall.tf). Internal ports (Prometheus 9090, Grafana 3000, Loki 3100) are reached over SSH tunnels only.
+- **TLS** via nginx + Let's Encrypt; all external traffic is HTTPS-only, but internal traffic between nginx and the app is plain HTTP (HTTP redirects to HTTPS); renewal is in cron.
+- **Non-root containers.** All three Dockerfiles add a dedicated `appuser` and `USER appuser` before `CMD`.
 - **Secrets out of source.** Removed hard-coded simulator credentials and the default Pyramid `SECRET_KEY`; both are now required env vars that crash the app on startup if missing.
 - **Image base bump** `python:3.9-slim` → `python:3.12-slim`.
 - **Shift-left in CI:** Semgrep (SAST) and Trivy (image CVE) gate the deploy.
 - **Third-party Actions pinned by commit SHA** (e.g. `SonarSource/sonarcloud-github-action@ffc3010689...`) so a hijacked tag can't exfiltrate workflow secrets.
-- **Grafana admin password** mandatory via `${GF_SECURITY_ADMIN_PASSWORD:?...}` — deploy fails if the env var is unset; the `admin/admin` default is gone.
 
 ### 2.5 Availability and scaling
 
 Availability comes from three layers:
 
-1. **Replica horizontality.** `minitwit` runs as 3 Swarm replicas with `max_replicas_per_node: 2`, so a worker droplet can die and Swarm keeps at least one replica serving on the survivor. The `update_config: { order: start-first }` guarantees we never go below 3 replicas during a rolling deploy.
-2. **Resource limits.** Every service declares both `reservations` and `limits` (e.g. `minitwit` 128 MB reserved / 256 MB cap). A misbehaving container cannot OOM the droplet.
-3. **Stateful services on durable volumes.** Prometheus, Grafana and Loki are pinned to the manager (`node.role == manager`) so their named volumes always re-attach to the same host. A daily `grafana-backup` sidecar takes a `sqlite3 .backup` snapshot of `grafana.db` and rotates 7 days of backups.
+1. **Replica horizontality.** `minitwit` runs as 3 Swarm replicas, so a worker droplet can die and Swarm keeps at least one replica serving on the survivor. The `update_config: { order: start-first }` guarantees we never go below 3 replicas during a rolling deploy.
+2. **Resource limits.** Every service declares both `reservations` and `limits` (e.g. `minitwit` 128 MB reserved / 256 MB cap). A misbehaving container cannot run the droplet out of memory.
+3. **Stateful services.** Prometheus, Grafana and Loki are pinned to the manager (`node.role == manager`) so their named volumes always re-attach to the same host.
 
-Horizontal scaling is one Terraform variable away (`worker_count`) and one Swarm command (`docker service scale minitwit_stack_minitwit=N`); the bottleneck is the database, which is vertically scaled in the DigitalOcean control panel. The application itself is stateless: gunicorn + signed-cookie sessions, no sticky routing, no in-memory caches.
+If we need more capacity, we just update the `worker_count` variable in Terraform to scale horizontally or to spin up more droplets, then use `docker service scale minitwit_stack_minitwit=N` to add more copies of the app.
 
 ---
 
@@ -181,15 +174,13 @@ Compared with previous coursework, three things felt categorically different:
 
 In accordance with ITU's guidelines on the use of generative AI for assessed work, we disclose the following.
 
-**Tools used.** Claude (Anthropic) and ChatGPT (OpenAI) — primarily Claude. Both were used as pair-programming and writing assistants, not as autonomous agents: every diff went through human review and the CI quality gate before merging.
+**Tools used.** Claude (Anthropic) and Gemini - primarily Claude. Both were used as pair-programming and writing assistants, not as autonomous agents: every diff went through human review and the CI quality gate before merging.
 
-**Where they helped (and how).**
+**Where they helped.**
 
-- **Boilerplate-heavy YAML and shell.** First drafts of `docker-compose.yml` placement constraints, Prometheus DNS-SD scrape configs, Grafana dashboard JSON skeletons and the `deploy.sh` hashing logic were AI-assisted, then audited line-by-line.
+- **YAML and shell.** First drafts of `docker-compose.yml` placement constraints, Prometheus DNS-SD scrape configs, Grafana dashboard JSON skeletons and the `deploy.sh` hashing logic were AI-assisted, then audited line-by-line.
 - **Documentation and report.** The structure of `SECURITY.md`, of `docs/infrastructure-as-code.md` and of this report was drafted with an LLM and then revised against the actual source files. Wording polish and consistency checks were AI-assisted.
-- **Bug diagnosis.** The MySQL error 1684 incident and the Docker-vs-ufw firewall issue were diagnosed faster by walking an LLM through the symptoms and asking it to enumerate hypotheses; the actual root-cause confirmation was done by reading logs ourselves.
-
-**Where they hindered.** Two recurring failure modes: (a) LLMs cheerfully generated `docker-compose.yml` snippets that referenced features rejected by the droplet's actual Docker version (e.g. `host_ip` on `ports`), which we only caught at deploy time; (b) they happily invented plausible-looking but non-existent GitHub Actions tags (`trivy-action@v0.24.0` does not exist — we ended up pinning `@v0.36.0` after a failing CI run). The lesson is the obvious one: LLMs need an executable feedback loop, and CI provides it.
+- **Bug diagnosis.** Thruought the process we faced some database errors and docker firewall issues that were diagnosed faster by walking an LLM through the symptoms and asking it to enumerate hypotheses and solutions; 
 
 **Co-authorship.** LLM tooling is registered as co-author `LLM <none>` in `.mailmap` per the assignment instructions.
 
