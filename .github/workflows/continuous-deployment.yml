@@ -61,10 +61,7 @@ jobs:
         with:
           scandir: '.'
 
-      # ---------- Shift-left security: Semgrep SAST ----------
-      # Runs the OWASP-Top-10, security-audit, Python and Dockerfile rule
-      # packs. `--error` makes findings of severity >= ERROR fail the build,
-      # so a security regression is caught BEFORE images are built/deployed.
+      # Runs the OWASP-Top-10, security-audit, Python and Dockerfile rule packs.
       - name: Install Semgrep
         run: pip install semgrep
 
@@ -75,7 +72,8 @@ jobs:
             --config=p/owasp-top-ten \
             --config=p/python \
             --config=p/dockerfile \
-            --error \
+            --error \  
+      # `--error` makes findings of severity >= ERROR fail the build, so a security regression is caught BEFORE images are built/deployed.
             --metrics=off \
             --timeout=300
 
@@ -161,10 +159,8 @@ jobs:
             -e SELENIUM_HUB=http://localhost:4444/wd/hub \
             minitwittestimage
 
-  # ---------- Image vulnerability scan ----------
-  # Scans the built application image for OS-package and Python-dependency CVEs.
-  # Fails the build on HIGH or CRITICAL severities so vulnerable images cannot
-  # be pushed to Docker Hub or deployed.
+  # scans the built application image for OS-package and Python-dependency CVEs.
+  # Fails the build on HIGH or CRITICAL severities so vulnerable images cannot be pushed to Docker Hub or deployed.
   security-scan:
     name: Image Vulnerability Scan (Trivy)
     needs: test
@@ -279,12 +275,9 @@ jobs:
             bash deploy.sh
           "
 
-      # ---------- Automatic GitHub Release ----------
-      # Creates a Release for every successful deploy to main, fulfilling the
-      # Session 4 "at least weekly automatic releases" requirement. Tag is
+      # Creates a Release for every successful deploy to main. Tag is
       # derived from the workflow run number + short SHA so it is unique and
-      # human-readable. SHA-pinned in line with the third-party-action policy
-      # documented in README §11.
+      # human-readable.
       - name: Create GitHub Release
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:

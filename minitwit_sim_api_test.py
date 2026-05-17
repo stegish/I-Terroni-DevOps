@@ -14,7 +14,7 @@ HEADERS = {
     "Authorization": f"Basic {ENCODED_CREDENTIALS}",
 }
 
-blub = "Blub!"  # fix by SonarQube
+blub = "Blub!" 
 
 
 def test_latest():
@@ -41,7 +41,6 @@ def test_register():
     response = requests.post(f"{BASE_URL}/register", data=json.dumps(data), headers=HEADERS, params=params)
     assert response.ok
 
-    # verify that latest was updated
     response = requests.get(f"{BASE_URL}/latest", headers=HEADERS)
     assert response.json()["latest"] == 1
 
@@ -54,7 +53,6 @@ def test_create_msg():
     response = requests.post(url, data=json.dumps(data), headers=HEADERS, params=params)
     assert response.ok
 
-    # verify that latest was updated
     response = requests.get(f"{BASE_URL}/latest", headers=HEADERS)
     assert response.json()["latest"] == 2
 
@@ -74,7 +72,6 @@ def test_get_latest_user_msgs():
 
     assert got_it_earlier
 
-    # verify that latest was updated
     response = requests.get(f"{BASE_URL}/latest", headers=HEADERS)
     assert response.json()["latest"] == 3
 
@@ -93,7 +90,6 @@ def test_get_latest_msgs():
 
     assert got_it_earlier
 
-    # verify that latest was updated
     response = requests.get(f"{BASE_URL}/latest", headers=HEADERS)
     assert response.json()["latest"] == 4
 
@@ -107,7 +103,6 @@ def test_register_b():
     response = requests.post(f"{BASE_URL}/register", data=json.dumps(data), headers=HEADERS, params=params)
     assert response.ok
 
-    # verify that latest was updated
     response = requests.get(f"{BASE_URL}/latest", headers=HEADERS)
     assert response.json()["latest"] == 5
 
@@ -121,7 +116,6 @@ def test_register_c():
     response = requests.post(f"{BASE_URL}/register", data=json.dumps(data), headers=HEADERS, params=params)
     assert response.ok
 
-    # verify that latest was updated
     response = requests.get(f"{BASE_URL}/latest", headers=HEADERS)
     assert response.json()["latest"] == 6
 
@@ -147,7 +141,6 @@ def test_follow_user():
     assert "b" in json_data["follows"]
     assert "c" in json_data["follows"]
 
-    # verify that latest was updated
     response = requests.get(f"{BASE_URL}/latest", headers=HEADERS)
     assert response.json()["latest"] == 9
 

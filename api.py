@@ -129,9 +129,6 @@ def api_register(request):
 def api_msgs(request):
     """get recent messages"""
     logger.info("Fetching recent messages", extra={"route": "api_msgs", "no": request.GET.get("no", 100)})
-    # Auth before any side-effect (write-after-auth pattern):
-    # unauthenticated callers must NOT be able to mutate LatestCommand
-    # via the `?latest=` query param.
     require_simulator_auth(request)
     update_latest(request)
 
@@ -166,10 +163,6 @@ def api_user_msgs_get(request):
         "Fetching user messages",
         extra={"route": "api_user_msgs", "username": username, "no": request.GET.get("no", 100)},
     )
-
-    # Auth before any side-effect (write-after-auth pattern):
-    # unauthenticated callers must NOT be able to mutate LatestCommand
-    # via the `?latest=` query param.
     require_simulator_auth(request)
     update_latest(request)
 
@@ -206,10 +199,6 @@ def api_user_msgs_post(request):
     """post a new message as a specific user"""
     username = request.matchdict["username"]
     logger.info("Posting message", extra={"route": "api_user_msgs_post", "username": username})
-
-    # Auth before any side-effect (write-after-auth pattern):
-    # unauthenticated callers must NOT be able to mutate LatestCommand
-    # via the `?latest=` query param.
     require_simulator_auth(request)
     update_latest(request)
 
@@ -257,10 +246,6 @@ def api_follows_get(request):
     username = request.matchdict["username"]
     no = int(request.GET.get("no", 100))
     logger.info("Fetching follows", extra={"route": "api_follows_get", "username": username, "no": no})
-
-    # Auth before any side-effect (write-after-auth pattern):
-    # unauthenticated callers must NOT be able to mutate LatestCommand
-    # via the `?latest=` query param.
     require_simulator_auth(request)
     update_latest(request)
 
@@ -288,10 +273,6 @@ def api_follows_post(request):
     """follow or unfollow a user"""
     username = request.matchdict["username"]
     logger.info("Follow action", extra={"route": "api_follows_post", "username": username})
-
-    # Auth before any side-effect (write-after-auth pattern):
-    # unauthenticated callers must NOT be able to mutate LatestCommand
-    # via the `?latest=` query param.
     require_simulator_auth(request)
     update_latest(request)
 

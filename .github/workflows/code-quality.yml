@@ -20,7 +20,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Disable shallow clone so SonarCloud can compute blame data for issue tracking
+          # disable shallow clone so SonarCloud can compute blame data for issue tracking
           fetch-depth: 0
 
       - name: SonarCloud Scan
