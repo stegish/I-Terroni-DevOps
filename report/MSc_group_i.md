@@ -1,7 +1,7 @@
 # MSc DevOps, Software Evolution and Software Maintenance — Final Report
 
 **Group i — *I-Terroni-DevOps***
-**Members:** Michael Fantinato, Vincenzo Sabino, Gabriele Matteoli, Rachele Russo, Beni Sabotto
+**Members:** Michael Fantinato, Vincenzo Sabino, Gabriele Matteoli, Rachele Russo, Benedek Szabo
 **Repository:** <https://github.com/stegish/I-Terroni-DevOps>
 **Date:** May 2026
 
@@ -13,13 +13,13 @@
 | --- | --- |
 | Main repository | <https://github.com/stegish/I-Terroni-DevOps> |
 | Issue tracker | <https://github.com/stegish/I-Terroni-DevOps/issues> |
-| Production application | `https://<droplet-IP>/` (DigitalOcean, fra1) |
-| CI/CD pipelines | [`.github/workflows/continuous-deployment.yml`](../.github/workflows/continuous-deployment.yml), [`.github/workflows/code-quality.yml`](../.github/workflows/code-quality.yml) |
+| Production application | `http://164.92.231.30/public` (DigitalOcean, fra1) |
+| CI/CD pipelines | [`.github/workflows/continuous-deployment.yml`](../.github/workflows/continuous-deployment.yml), [`.github/workflows/code-quality.yml`](../.github/workflows/code-quality.yml), [`.github/workflows/build-report.yml`](../.github/workflows/build-report.yml) |
 | Container images | `michaelfant/minitwitimage:latest`, `michaelfant/flagtoolimage:latest` on Docker Hub |
-| Infrastructure as Code | [`infrastructure/`](../infrastructure/) (Terraform) — see [`docs/infrastructure-as-code.md`](../docs/infrastructure-as-code.md) |
+| Infrastructure as Code | [`infrastructure/`](../infrastructure/) [`docs/infrastructure-as-code.md`](../docs/infrastructure-as-code.md) |
 | Security report | [`SECURITY.md`](../SECURITY.md) |
-| Grafana dashboards | provisioned from [`monitoring/grafana/dashboards/`](../monitoring/grafana/dashboards/) |
-| Code-quality dashboards | SonarCloud + Codacy projects (linked from PR checks) |
+| Grafana dashboards |  [`monitoring/grafana/dashboards/`](../monitoring/grafana/dashboards/) |
+| Code-quality dashboards | SonarCloud + Codacy projects |
 
 ---
 
@@ -27,7 +27,7 @@
 
 ### 1.1 Design and Architecture
 
-*ITU-MiniTwit* is a Twitter-like micro-blogging service that we rewrote from the legacy Flask + raw-SQL code base into a **Pyramid** application with a clean **SQLAlchemy ORM** data layer. The web framework choice is documented in [`README.md`](../README.md): Pyramid was preferred over Bottle (manual integration with a separate templating engine) and Flask (heavy reliance on global state) because of its explicit request object — sessions and DB handles attach to `request.db`, which makes the code unit-testable without an application context.
+*ITU-MiniTwit* is a Twitter-like micro-blogging service that we rewrote from the given Flask + raw-SQL code base into a **Pyramid** application with  **SQLAlchemy ORM** data layer. The web framework choice is documented in [`README.md`](../README.md): We chose Pyramid instead of Bottle or Flask because it gave us a clearer structure for the application. Bottle would have required more manual setup for things like templating, while Flask often depends on global application state. Pyramid uses an explicit request object, which made it easier for us to attach things like the database session to `request.db`. This also made the code easier to test, since individual request handlers could be tested without needing to rely on a full application context.
 
 In production the system is a **3-node Docker Swarm** running on DigitalOcean droplets in the `fra1` region:
 
@@ -35,7 +35,7 @@ In production the system is a **3-node Docker Swarm** running on DigitalOcean dr
 - **2 workers** (`s-1vcpu-1gb` each) — run **3 `minitwit` replicas** (Pyramid + 3 gunicorn workers each) plus the `flagtool` admin container.
 - Per-node agents (`node-exporter`, `cadvisor`, `promtail`) run in Swarm `mode: global` — exactly one task per droplet.
 
-A single **DigitalOcean Managed MySQL 8** instance sits outside the Swarm and is reached over TLS via the `DATABASE_URL` env var. **nginx** terminates TLS on the manager and reverse-proxies into the overlay network through Swarm DNS (`tasks.minitwit:5000`). Replicas are discovered by Prometheus and nginx through the same overlay-DNS mechanism, so each replica is actually scraped — not just one round-robin IP.
+The database runs as a separate DigitalOcean Managed MySQL 8 instance outside the Docker Swarm. The application connects to it through the `DATABASE_URL` environment variable, using TLS for the connection. On the manager node, nginx handles HTTPS traffic and forwards requests into the Swarm network to the MiniTwit service through Swarm DNS (`tasks.minitwit:5000`). We also use this DNS-based service discovery for monitoring, so Prometheus can scrape the actual running replicas instead of only reaching one container through a single load-balanced address.
 
 The placement is enforced declaratively in [`docker-compose.yml`](../docker-compose.yml):
 
@@ -49,6 +49,8 @@ minitwit:
     update_config: { order: start-first, delay: 10s }
 ```
 
+Deployment safety is enforced through a mandatory healthcheck: each replica runs a Python `urllib` probe every 10 seconds, with a 20-second grace period before Swarm considers the container ready. This prevents the `start-first` rolling strategy from terminating an old replica before the new one is fully initialized and accepting connections. Additionally, services declare varying restart policies: the main application uses `condition: any` (restart on all exits), while observability and utility services use `condition: on-failure` with exponential backoff (delay, max_attempts, window), allowing graceful shutdown and containment of transient failures.
+
 ### 1.2 Dependencies
 
 | Layer | Tooling |
@@ -57,9 +59,9 @@ minitwit:
 | Web framework | Pyramid + `pyramid_jinja2` (templating) |
 | WSGI server | gunicorn (3 workers × 2 threads) |
 | ORM / DB driver | SQLAlchemy + PyMySQL |
-| Database | MySQL 8 (DigitalOcean managed); SQLite in CI |
+| Database | MySQL 8 (DigitalOcean Managed external instance, TLS connection via `DATABASE_URL` environment variable); SQLite in CI |
 | Frontend | server-rendered Jinja2 templates + static CSS |
-| Observability | Prometheus 2.55, Grafana 11.4, Loki 2.9, Promtail 2.9, `node-exporter` 1.8, cAdvisor 0.49, `mysqld-exporter` 0.15, `prometheus-client` (in-app) |
+| Observability | Prometheus 2.55 (280M limit), Grafana 11.4 (280M limit), Loki 2.9, Promtail 3.0, `node-exporter` 1.8 (64M limit), cAdvisor 0.49, `mysqld-exporter` 0.14.0, `prometheus-client` (in-app); per-node agents run `mode: global` with resource caps to prevent interference with application workloads |
 | Reverse proxy / TLS | nginx 1.27-alpine + Let's Encrypt (certbot) |
 | Container orchestration | Docker Engine + Docker Swarm (compose-spec, no legacy `version:`) |
 | Infrastructure as Code | **Terraform** (DigitalOcean provider); `Vagrantfile` kept for single-node local experiments only |
@@ -92,15 +94,15 @@ static-analysis  →  test  →  security-scan  →  build-and-deploy
 ```
 
 1. **`static-analysis`** — `ruff` (lint + format), `codespell`, `mypy` (non-blocking), `hadolint` on the three Dockerfiles, `shellcheck` on `control.sh`/`deploy.sh`, and **Semgrep SAST** with the `p/security-audit`, `p/owasp-top-ten`, `p/python` and `p/dockerfile` rule packs, failing the build on findings of severity ≥ ERROR.
-2. **`test`** — needs `static-analysis`. Builds the production image locally, spins up MySQL 8 + Selenium Chrome on a Docker network, runs the **one-shot schema init** (mirroring `deploy.sh`), and then executes the three test suites: integration (`minitwit_tests_refactor.py`), simulator API (`minitwit_sim_api_test.py`) and Selenium UI/E2E (`test_itu_minitwit_ui.py`).
+2. **`test`** — needs `static-analysis`. Builds the production image locally, spins up MySQL 8 + Selenium Chrome on a Docker network, runs the **one-shot schema init** (mirroring `deploy.sh`), and then executes the three test suites: integration (`minitwit_tests_refactor.py`), simulator API (`minitwit_sim_api_test.py`) and Selenium (`test_itu_minitwit_ui.py`).
 3. **`security-scan`** — needs `test`. **Trivy** scans the built image for OS-package and Python-dependency CVEs and fails on HIGH/CRITICAL. Results are also uploaded as SARIF to the GitHub Security tab.
 4. **`build-and-deploy`** — needs `security-scan`. Only runs on `push` to `main` (not on PR). Pushes the two production images to Docker Hub and SSHes into the manager droplet to run `deploy.sh`, which uses `docker stack deploy` with `--with-registry-auth` for a rolling update.
 
-A parallel workflow ([`code-quality.yml`](../.github/workflows/code-quality.yml)) runs SonarCloud and Codacy on every push.
+**Infrastructure** is provisioned declaratively with **Terraform** ([`infrastructure/main.tf`](../infrastructure/main.tf)). Remote-exec provisioners automate `docker swarm init` on the manager and `docker swarm join` on workers using a join token retrieved via SSH. Guard clauses ensure reapplies are safe on already-provisioned nodes.
 
 **Infrastructure** is provisioned declaratively with **Terraform** ([`infrastructure/main.tf`](../infrastructure/main.tf)). `bring-up.sh` chains `terraform apply` → `scp` of the deploy artifacts → `bash deploy.sh` on the manager. `teardown.sh` issues `terraform destroy`, which lets us decommission the cluster between the simulator stop and the exam day without paying for idle droplets. The rationale and trade-offs (Terraform vs. Bash + `doctl` vs. Vagrant) are documented in [`docs/infrastructure-as-code.md`](../docs/infrastructure-as-code.md).
 
-The deploy itself ([`deploy.sh`](../deploy.sh)) does three important things beyond `docker stack deploy`: it computes a `sha256` hash of the nginx config and promtail config and injects them as labels / Swarm config names so that a config-only change reliably triggers a rolling restart, and it runs `init_db()` exactly once in a throwaway container — see §3.
+The deploy itself ([`deploy.sh`](../deploy.sh)) does three important things beyond `docker stack deploy`: it computes a `sha256` hash of the nginx config and promtail config and injects them as labels / Swarm config names so that a config-only change reliably triggers a rolling restart, and it runs `init_db()` exactly once in a throwaway container.
 
 ### 2.2 Monitoring
 
