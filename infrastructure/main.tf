@@ -22,9 +22,16 @@ resource "digitalocean_droplet" "manager" {
 
   provisioner "remote-exec" {
     inline = [
+      "set -e",
       "export DEBIAN_FRONTEND=noninteractive",
+      # Wait for cloud-init / unattended-upgrades to release the dpkg lock,
+      # otherwise apt-get install races them and silently fails to install docker.
+      "cloud-init status --wait || true",
+      "while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || fuser /var/lib/apt/lists/lock >/dev/null 2>&1; do sleep 3; done",
       "apt-get update -y",
-      "apt-get install -y docker.io docker-compose-plugin git ufw certbot unattended-upgrades",
+      # docker-compose-plugin isn't in Ubuntu 24.04 default repos; we only need
+      # the engine here since deploy.sh uses `docker stack deploy` (built-in).
+      "apt-get install -y docker.io git ufw certbot unattended-upgrades",
       "systemctl enable --now docker",
       # Firewall on the host. Docker bypasses ufw via iptables, so this only
       # protects host-bound sockets
@@ -87,9 +94,12 @@ resource "digitalocean_droplet" "worker" {
 
   provisioner "remote-exec" {
     inline = [
+      "set -e",
       "export DEBIAN_FRONTEND=noninteractive",
+      "cloud-init status --wait || true",
+      "while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || fuser /var/lib/apt/lists/lock >/dev/null 2>&1; do sleep 3; done",
       "apt-get update -y",
-      "apt-get install -y docker.io docker-compose-plugin ufw unattended-upgrades",
+      "apt-get install -y docker.io ufw unattended-upgrades",
       "systemctl enable --now docker",
       "ufw --force reset",
       "ufw default deny incoming",
