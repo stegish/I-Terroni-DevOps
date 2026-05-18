@@ -73,7 +73,6 @@ jobs:
             --config=p/python \
             --config=p/dockerfile \
             --error \  
-      # `--error` makes findings of severity >= ERROR fail the build, so a security regression is caught BEFORE images are built/deployed.
             --metrics=off \
             --timeout=300
 
