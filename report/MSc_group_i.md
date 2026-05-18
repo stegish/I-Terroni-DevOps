@@ -146,7 +146,7 @@ If we need more capacity, we just update the `worker_count` variable in Terrafor
 
 ## 3. Reflection Perspective
 
-### 3.1 Database dataloss during first migration from SQLlite to MySql
+### 3.1 Database dataloss during first migration from sqlite to MySql
 
 During the migration from SQLite to the DigitalOcean MySQL database, our biggest issue was unexpected data loss: the new database was mostly empty, while the simulator still expected the historical old users and follow relationships to exist. This caused steadily increasing errors in the tweet, follow, and unfollow endpoints, even though registration still worked. After checking Docker, API behavior, and Grafana metrics, we found that the real problem was not the code or infrastructure performance, but missing production data.
 
@@ -166,7 +166,7 @@ We solved it by tuning Loki’s memory behavior. Both chunks were reduced from 1
 
 ### 3.4 "DevOps" style of work
 
-The DevOps style of our work was different from previous development projects because we did not only focus on writing application features. We also had to think about deployment, infrastructure, monitoring, logging, performance, and recovery as part of the same development process. Instead of manually running the app and checking if it worked locally, we used Docker, Docker Swarm, GitHub Actions, Prometheus, Grafana, Loki, and DigitalOcean to build a production-like system. The hardest part was managing all these different components which we havent used before to make the separate work together seemlessly. The biggest issue definitely we had with the database as seen in the [3.1](#31-database-dataloss-during-first-migration-from-sqllite-to-mysql) and [3.2](#32-slow-public-timeline-query-and-user-related-pages) paragraphs. Since we thought for so long that the application and the droplets were causing issues. This highlights how important a correct and well put together monitoring/logging system is the hearth of an application.
+The DevOps style of our work was different from previous development projects because we did not only focus on writing application features. We also had to think about deployment, infrastructure, monitoring, logging, performance, and recovery as part of the same development process. Instead of manually running the app and checking if it worked locally, we used Docker, Docker Swarm, GitHub Actions, Prometheus, Grafana, Loki, and DigitalOcean to build a production-like system. The hardest part was managing all these different components which we haven't used before to make the separate work together seamlessly. The biggest issue definitely we had with the database as seen in the [3.1](#31-database-dataloss-during-first-migration-from-sqllite-to-mysql) and [3.2](#32-slow-public-timeline-query-and-user-related-pages) paragraphs. Since we thought for so long that the application and the droplets were causing issues. This highlights how important a correct and well put together monitoring/logging system is the hearth of an application.
 
 ---
 
