@@ -65,7 +65,6 @@ def add_message(http_session, text):
     return r
 
 
-
 def test_register():
     """Make sure registering works"""
     r = register("user13", "default")

@@ -14,7 +14,7 @@ HEADERS = {
     "Authorization": f"Basic {ENCODED_CREDENTIALS}",
 }
 
-blub = "Blub!" 
+blub = "Blub!"
 
 
 def test_latest():
