@@ -725,7 +725,7 @@
     "to": "now"
   },
   "timezone": "browser",
-  "title": "MiniTwit \u2014 Logs & Errors",
+  "title": "MiniTwit - Logs & Errors",
   "uid": "minitwit-logs",
   "version": 1
 }

@@ -575,7 +575,7 @@
     "to": "now"
   },
   "timezone": "browser",
-  "title": "MiniTwit \u2014 Database",
+  "title": "MiniTwit - Database",
   "uid": "minitwit-database",
   "version": 1
 }

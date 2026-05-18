@@ -6,6 +6,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-report:
     runs-on: ubuntu-latest
@@ -39,3 +42,18 @@ jobs:
         with:
           name: MSc_group_i_report
           path: report/build/MSc_group_i.pdf
+
+      - name: Commit and push PDF to repository
+        if: github.event_name == 'push'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add report/build/MSc_group_i.pdf
+
+          if git diff --cached --quiet; then
+            echo "No PDF changes to commit"
+          else
+            git commit -m "docs: auto-generated report PDF [skip ci]"
+            git push origin HEAD:${GITHUB_REF_NAME}
+          fi
