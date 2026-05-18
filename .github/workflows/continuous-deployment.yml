@@ -72,7 +72,7 @@ jobs:
             --config=p/owasp-top-ten \
             --config=p/python \
             --config=p/dockerfile \
-            --error \  
+            --error \
             --metrics=off \
             --timeout=300
 
