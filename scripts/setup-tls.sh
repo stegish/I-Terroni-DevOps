@@ -1,21 +1,14 @@
 #!/bin/bash
-# Bootstrap a Let's Encrypt TLS certificate for this droplet, then upgrade
-# nginx/nginx.conf from HTTP-only to HTTPS-with-redirect.
-#
+
 # Run ONCE on the swarm manager droplet, after the stack is already deployed
-# and reachable on port 80. Uses certbot's webroot mode, so the running
-# nginx container serves the ACME challenge — no service downtime required.
-#
+# and reachable on port 80. 
 # Usage:  sudo bash scripts/setup-tls.sh <domain>
-#
-# After it succeeds, you must:
+
+# After it succeeds:
 #   1. git add nginx/nginx.conf  &&  git commit  &&  git push
-#      (so the next CI deploy preserves the HTTPS config)
 #   2. docker service update --force minitwit_stack_nginx
-#      (so nginx reloads with the new config)
-#
-# Renewal is automatic — certbot's systemd timer reissues the cert every 60
-# days and the deploy hook reloads nginx.
+
+# Renewal is automatic, every 60 days and the deploy hook reloads nginx.
 
 set -euo pipefail
 
@@ -41,13 +34,10 @@ if [[ ! -f "$NGINX_CONF" ]]; then
   exit 1
 fi
 
-# 1. Make sure /var/www/certbot exists (the ACME challenge dir).
+# Make sure /var/www/certbot exists (the ACME challenge dir).
 mkdir -p /var/www/certbot
 chown -R root:root /var/www/certbot
 
-# 2. Issue the cert via webroot mode. The running nginx container serves
-#    /.well-known/acme-challenge/ from the same /var/www/certbot dir
-#    (bind-mounted via docker-compose).
 echo "==> Issuing Let's Encrypt cert for $DOMAIN..."
 certbot certonly \
   --webroot \
@@ -57,9 +47,8 @@ certbot certonly \
   --email "admin@${DOMAIN}" \
   -d "${DOMAIN}"
 
-# 3. Rewrite nginx.conf to the HTTPS-enabled version.
-#    Single source of truth — this file is committed to git so subsequent
-#    CI deploys preserve the HTTPS config instead of overwriting it.
+# Rewrite nginx.conf to the HTTPS-enabled version. 
+# This file is committed to git so subsequent CI deploys preserve the HTTPS config instead of overwriting it.
 echo "==> Rewriting $NGINX_CONF to HTTPS mode..."
 cat > "$NGINX_CONF" <<EOF
 user nginx;
@@ -145,7 +134,7 @@ http {
 }
 EOF
 
-# 4. Install a renewal hook that reloads the swarm nginx after each renewal.
+# Install a renewal hook that reloads the swarm nginx after each renewal.
 RENEWAL_HOOK=/etc/letsencrypt/renewal-hooks/deploy/reload-swarm-nginx.sh
 mkdir -p "$(dirname "$RENEWAL_HOOK")"
 cat > "$RENEWAL_HOOK" <<'EOF'
@@ -155,7 +144,7 @@ docker service update --force minitwit_stack_nginx >/dev/null 2>&1 || true
 EOF
 chmod +x "$RENEWAL_HOOK"
 
-# 5. Make sure the certbot renewal timer is on.
+# Make sure the certbot renewal timer is on.
 systemctl enable --now certbot.timer >/dev/null 2>&1 || true
 
 cat <<EOF
