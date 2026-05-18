@@ -8,6 +8,8 @@ merge.txt
 
 out/
 
+build/
+
 # Terraform local state, contains secrets (SSH keys, tokens, DO API
 # responses)
 *.tfstate
